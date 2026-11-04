@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="id">
 <head>
@@ -164,99 +163,217 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 let currentRole=null,currentDp=50,productCache=[],periodCache=[];
 
 function resetProductForm(){
- $("productForm").reset();$("productId").value="";$("saveProduct").textContent="Simpan Produk";show("cancelEdit",false);show("editActions",false);
+ $("productForm").reset();
+ $("productId").value="";
+ $("saveProduct").textContent="Simpan Produk";
+ show("cancelEdit",false);
+ show("editActions",false);
 }
 
 async function loadProducts(){
  const {data,error}=await db.from("products").select("id,name,description,price,is_active,created_at").order("created_at",{ascending:false});
- if(error){$("adminProductList").textContent="Gagal memuat produk: "+error.message;$("resellerProductList").textContent="Gagal memuat produk: "+error.message;return;}
- const all=data||[];productCache=all;
+ if(error){
+  $("adminProductList").textContent="Gagal memuat produk: "+error.message;
+  $("resellerProductList").textContent="Gagal memuat produk: "+error.message;
+  return;
+ }
+ const all=data||[];
+ productCache=all;
+
  $("adminProductList").innerHTML=all.length?all.map(p=>`
  <div class="item"><div class="topline"><b>${esc(p.name)}</b><span class="pill">${p.is_active?"Aktif":"Nonaktif"}</span></div>
  <div>${money(p.price)}</div><div class="muted">${esc(p.description||"Tidak ada deskripsi")}</div>
  <button data-edit="${esc(p.id)}">Edit</button>
  <button class="secondary" data-toggle="${esc(p.id)}" data-active="${p.is_active}">${p.is_active?"Nonaktifkan":"Aktifkan"}</button></div>`).join(""):"Belum ada produk. Tambahkan produk melalui formulir di atas.";
+
  const active=all.filter(p=>p.is_active);
  $("resellerProductList").innerHTML=active.length?active.map(p=>`
  <div class="item"><div class="topline"><div><b>${esc(p.name)}</b><div>${money(p.price)}</div></div>
  <div><label>Jumlah</label><input class="qty" type="number" min="0" step="1" value="0" data-qty="${esc(p.id)}"></div></div>
  <div class="muted">${esc(p.description||"")}</div></div>`).join(""):"Belum ada produk aktif.";
+
  $("adminProductList").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{
-  const p=all.find(x=>String(x.id)===b.dataset.edit);if(!p)return;
-  $("productId").value=p.id;$("productName").value=p.name||"";$("productDescription").value=p.description||"";$("productPrice").value=p.price??0;
-  $("saveProduct").textContent="Simpan Perubahan";show("cancelEdit",true);show("editActions",true);window.scrollTo({top:0,behavior:"smooth"});
+  const p=all.find(x=>String(x.id)===b.dataset.edit);
+  if(!p)return;
+  $("productId").value=p.id;
+  $("productName").value=p.name||"";
+  $("productDescription").value=p.description||"";
+  $("productPrice").value=p.price??0;
+  $("saveProduct").textContent="Simpan Perubahan";
+  show("cancelEdit",true);
+  show("editActions",true);
+  window.scrollTo({top:0,behavior:"smooth"});
  });
+
  $("adminProductList").querySelectorAll("[data-toggle]").forEach(b=>b.onclick=async()=>{
-  b.disabled=true;const {error}=await db.from("products").update({is_active:b.dataset.active!=="true"}).eq("id",b.dataset.toggle);
-  if(error)note("productMsg","Gagal mengubah status: "+error.message);else{note("productMsg","Status produk berhasil diperbarui.");await loadProducts();}
+  b.disabled=true;
+  const {error}=await db.from("products").update({is_active:b.dataset.active!=="true"}).eq("id",b.dataset.toggle);
+  if(error)note("productMsg","Gagal mengubah status: "+error.message);
+  else{
+   note("productMsg","Status produk berhasil diperbarui.");
+   await loadProducts();
+  }
  });
+
  $("resellerProductList").querySelectorAll("[data-qty]").forEach(input=>input.addEventListener("input",refreshOrderSummary));
  refreshOrderSummary();
 }
 
 $("productForm").onsubmit=async e=>{
- e.preventDefault();$("saveProduct").disabled=true;const id=$("productId").value;
- const payload={name:$("productName").value.trim(),description:$("productDescription").value.trim(),price:Number($("productPrice").value),is_active:true};
+ e.preventDefault();
+ $("saveProduct").disabled=true;
+ const id=$("productId").value;
+ const payload={
+  name:$("productName").value.trim(),
+  description:$("productDescription").value.trim(),
+  price:Number($("productPrice").value),
+  is_active:true
+ };
  const result=id?await db.from("products").update(payload).eq("id",id):await db.from("products").insert(payload);
  $("saveProduct").disabled=false;
- if(result.error){note("productMsg","Gagal menyimpan produk: "+result.error.message);return;}
- note("productMsg",id?"Produk berhasil diperbarui.":"Produk berhasil ditambahkan.");resetProductForm();await loadProducts();
+ if(result.error){
+  note("productMsg","Gagal menyimpan produk: "+result.error.message);
+  return;
+ }
+ note("productMsg",id?"Produk berhasil diperbarui.":"Produk berhasil ditambahkan.");
+ resetProductForm();
+ await loadProducts();
 };
+
 $("deleteProduct").onclick=async()=>{
- const id=$("productId").value,name=$("productName").value.trim()||"produk ini";if(!id)return;
+ const id=$("productId").value;
+ const name=$("productName").value.trim()||"produk ini";
+ if(!id)return;
  if(!confirm(`Yakin ingin menghapus "${name}"? Jika sudah dipakai dalam riwayat pesanan, database mungkin menolak penghapusan.`))return;
- $("deleteProduct").disabled=true;const {error}=await db.from("products").delete().eq("id",id);$("deleteProduct").disabled=false;
- if(error){note("productMsg","Produk tidak dapat dihapus. Kemungkinan sudah digunakan dalam riwayat pesanan. Kamu masih bisa menonaktifkannya. Detail: "+error.message);return;}
- note("productMsg","Produk berhasil dihapus.");resetProductForm();await loadProducts();
+ $("deleteProduct").disabled=true;
+ const {error}=await db.from("products").delete().eq("id",id);
+ $("deleteProduct").disabled=false;
+ if(error){
+  note("productMsg","Produk tidak dapat dihapus. Kemungkinan sudah digunakan dalam riwayat pesanan. Kamu masih bisa menonaktifkannya. Detail: "+error.message);
+  return;
+ }
+ note("productMsg","Produk berhasil dihapus.");
+ resetProductForm();
+ await loadProducts();
 };
 $("cancelEdit").onclick=resetProductForm;
 
 async function loadStoreSettings(){
  const {data,error}=await db.from("store_settings").select("id,dp_percentage").eq("id",1).maybeSingle();
- if(error){note("dpMsg","Gagal memuat pengaturan DP: "+error.message);return;}
- if(data){currentDp=Number(data.dp_percentage);$("dpPercentage").value=currentDp;$("orderDpPercent").textContent=currentDp;refreshOrderSummary();}
- else note("dpMsg","Pengaturan DP belum memiliki data. Pastikan tabel store_settings berisi id 1.");
+ if(error){
+  note("dpMsg","Gagal memuat pengaturan DP: "+error.message);
+  return;
+ }
+ if(data){
+  currentDp=Number(data.dp_percentage);
+  $("dpPercentage").value=currentDp;
+  $("orderDpPercent").textContent=currentDp;
+  refreshOrderSummary();
+ }else{
+  note("dpMsg","Pengaturan DP belum memiliki data. Pastikan tabel store_settings berisi id 1.");
+ }
 }
+
 $("saveDp").onclick=async()=>{
- const value=Number($("dpPercentage").value);if(!Number.isFinite(value)||value<0||value>100){note("dpMsg","Masukkan DP antara 0 sampai 100 persen.");return;}
- $("saveDp").disabled=true;const {error}=await db.from("store_settings").upsert({id:1,dp_percentage:value,updated_at:new Date().toISOString()},{onConflict:"id"});$("saveDp").disabled=false;
- if(error){note("dpMsg","Gagal menyimpan DP: "+error.message);return;}
- currentDp=value;$("orderDpPercent").textContent=value;refreshOrderSummary();note("dpMsg","Pengaturan DP berhasil disimpan: "+value+"%.");
+ const value=Number($("dpPercentage").value);
+ if(!Number.isFinite(value)||value<0||value>100){
+  note("dpMsg","Masukkan DP antara 0 sampai 100 persen.");
+  return;
+ }
+ $("saveDp").disabled=true;
+ const {error}=await db.from("store_settings").upsert({id:1,dp_percentage:value,updated_at:new Date().toISOString()},{onConflict:"id"});
+ $("saveDp").disabled=false;
+ if(error){
+  note("dpMsg","Gagal menyimpan DP: "+error.message);
+  return;
+ }
+ currentDp=value;
+ $("orderDpPercent").textContent=value;
+ refreshOrderSummary();
+ note("dpMsg","Pengaturan DP berhasil disimpan: "+value+"%.");
 };
 
 function resetPeriodForm(){
- $("periodForm").reset();$("periodId").value="";$("periodOpen").checked=true;$("savePeriod").textContent="Simpan Periode";show("cancelPeriodEdit",false);
+ $("periodForm").reset();
+ $("periodId").value="";
+ $("periodOpen").checked=true;
+ $("savePeriod").textContent="Simpan Periode";
+ show("cancelPeriodEdit",false);
 }
+
 async function loadPeriods(){
  const {data,error}=await db.from("order_periods").select("id,name,start_date,end_date,is_open,created_at").order("created_at",{ascending:false});
- if(error){$("adminPeriodList").textContent="Gagal memuat periode: "+error.message;$("periods").textContent="Gagal memuat: "+error.message;return;}
- const all=data||[];periodCache=all;
+ if(error){
+  $("adminPeriodList").textContent="Gagal memuat periode: "+error.message;
+  $("periods").textContent="Gagal memuat: "+error.message;
+  return;
+ }
+ const all=data||[];
+ periodCache=all;
+
  $("adminPeriodList").innerHTML=all.length?all.map(x=>`
  <div class="item"><div class="topline"><b>${esc(x.name)}</b><span class="pill">${x.is_open?"Dibuka":"Ditutup"}</span></div>
  <div class="muted">${esc(x.start_date||"-")} sampai ${esc(x.end_date||"-")}</div>
  <button data-period-edit="${esc(x.id)}">Edit</button><button class="danger" data-period-delete="${esc(x.id)}">Hapus</button></div>`).join(""):"Belum ada periode. Tambahkan periode melalui formulir di atas.";
+
  $("periods").textContent=all.length?all.map(x=>`${x.name||"Periode pesanan"} (${x.is_open?"Dibuka":"Ditutup"})`).join(" · "):"Belum ada periode pesanan.";
+
  const openPeriods=all.filter(x=>x.is_open);
  $("orderPeriod").innerHTML='<option value="">Pilih periode</option>'+openPeriods.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} (${esc(x.start_date)} s.d. ${esc(x.end_date)})</option>`).join("");
+
  $("adminPeriodList").querySelectorAll("[data-period-edit]").forEach(b=>b.onclick=()=>{
-  const x=all.find(v=>String(v.id)===b.dataset.periodEdit);if(!x)return;
-  $("periodId").value=x.id;$("periodName").value=x.name||"";$("periodStart").value=x.start_date||"";$("periodEnd").value=x.end_date||"";$("periodOpen").checked=!!x.is_open;
-  $("savePeriod").textContent="Simpan Perubahan";show("cancelPeriodEdit",true);window.scrollTo({top:0,behavior:"smooth"});
+  const x=all.find(v=>String(v.id)===b.dataset.periodEdit);
+  if(!x)return;
+  $("periodId").value=x.id;
+  $("periodName").value=x.name||"";
+  $("periodStart").value=x.start_date||"";
+  $("periodEnd").value=x.end_date||"";
+  $("periodOpen").checked=!!x.is_open;
+  $("savePeriod").textContent="Simpan Perubahan";
+  show("cancelPeriodEdit",true);
+  window.scrollTo({top:0,behavior:"smooth"});
  });
+
  $("adminPeriodList").querySelectorAll("[data-period-delete]").forEach(b=>b.onclick=async()=>{
-  const x=all.find(v=>String(v.id)===b.dataset.periodDelete);if(!x||!confirm(`Yakin ingin menghapus periode "${x.name}"?`))return;
-  b.disabled=true;const {error}=await db.from("order_periods").delete().eq("id",x.id);
-  if(error){b.disabled=false;note("periodMsg","Gagal menghapus periode: "+error.message);return;}
-  note("periodMsg","Periode berhasil dihapus.");await loadPeriods();
+  const x=all.find(v=>v.id===b.dataset.periodDelete);
+  if(!x||!confirm(`Yakin ingin menghapus periode "${x.name}"?`))return;
+  b.disabled=true;
+  const {error}=await db.from("order_periods").delete().eq("id",x.id);
+  if(error){
+   b.disabled=false;
+   note("periodMsg","Gagal menghapus periode: "+error.message);
+   return;
+  }
+  note("periodMsg","Periode berhasil dihapus.");
+  await loadPeriods();
  });
 }
+
 $("periodForm").onsubmit=async e=>{
- e.preventDefault();const start=$("periodStart").value,end=$("periodEnd").value;
- if(end<start){note("periodMsg","Tanggal akhir tidak boleh sebelum tanggal mulai.");return;}
- const id=$("periodId").value,payload={name:$("periodName").value.trim(),start_date:start,end_date:end,is_open:$("periodOpen").checked};
- $("savePeriod").disabled=true;const result=id?await db.from("order_periods").update(payload).eq("id",id):await db.from("order_periods").insert(payload);$("savePeriod").disabled=false;
- if(result.error){note("periodMsg","Gagal menyimpan periode: "+result.error.message);return;}
- note("periodMsg",id?"Periode berhasil diperbarui.":"Periode berhasil ditambahkan.");resetPeriodForm();await loadPeriods();
+ e.preventDefault();
+ const start=$("periodStart").value;
+ const end=$("periodEnd").value;
+ if(end<start){
+  note("periodMsg","Tanggal akhir tidak boleh sebelum tanggal mulai.");
+  return;
+ }
+ const id=$("periodId").value;
+ const payload={
+  name:$("periodName").value.trim(),
+  start_date:start,
+  end_date:end,
+  is_open:$("periodOpen").checked
+ };
+ $("savePeriod").disabled=true;
+ const result=id?await db.from("order_periods").update(payload).eq("id",id):await db.from("order_periods").insert(payload);
+ $("savePeriod").disabled=false;
+ if(result.error){
+  note("periodMsg","Gagal menyimpan periode: "+result.error.message);
+  return;
+ }
+ note("periodMsg",id?"Periode berhasil diperbarui.":"Periode berhasil ditambahkan.");
+ resetPeriodForm();
+ await loadPeriods();
 };
 $("cancelPeriodEdit").onclick=resetPeriodForm;
 
@@ -264,29 +381,62 @@ $("cancelPeriodEdit").onclick=resetPeriodForm;
 async function loadResellers(){
  $("resellerList").textContent="Memuat reseller…";
  const {data,error}=await db.from("profiles").select("id,full_name,phone,role,reseller_code,is_active,created_at").eq("role","reseller").order("created_at",{ascending:false});
- if(error){$("resellerList").textContent="Gagal memuat reseller: "+error.message;return;}
- const list=data||[];if(!list.length){$("resellerList").textContent="Belum ada reseller terdaftar.";return;}
+ if(error){
+  $("resellerList").textContent="Gagal memuat reseller: "+error.message;
+  return;
+ }
+ const list=data||[];
+ if(!list.length){
+  $("resellerList").textContent="Belum ada reseller terdaftar.";
+  return;
+ }
  $("resellerList").innerHTML=list.map(r=>`
  <div class="item"><div class="topline"><b>${esc(r.full_name)}</b><span class="pill">${r.is_active?"Aktif":"Nonaktif"}</span></div>
  <div class="muted">Kode reseller: ${esc(r.reseller_code||"-")}</div><div class="muted">No. HP: ${esc(r.phone||"-")}</div>
  <button class="${r.is_active?"danger":"secondary"}" data-reseller-toggle="${esc(r.id)}" data-active="${r.is_active}">${r.is_active?"Nonaktifkan":"Aktifkan"}</button></div>`).join("");
+
  $("resellerList").querySelectorAll("[data-reseller-toggle]").forEach(b=>b.onclick=async()=>{
-  const next=b.dataset.active!=="true",action=next?"mengaktifkan":"menonaktifkan";
-  if(!confirm(`Yakin ingin ${action} reseller ini?`))return;b.disabled=true;
+  const next=b.dataset.active!=="true";
+  const action=next?"mengaktifkan":"menonaktifkan";
+  if(!confirm(`Yakin ingin ${action} reseller ini?`))return;
+  b.disabled=true;
   const {error}=await db.from("profiles").update({is_active:next}).eq("id",b.dataset.resellerToggle).eq("role","reseller");
-  if(error){b.disabled=false;note("resellerMsg","Gagal mengubah status reseller: "+error.message);return;}
-  note("resellerMsg","Status reseller berhasil diperbarui.");await loadResellers();
+  if(error){
+   b.disabled=false;
+   note("resellerMsg","Gagal mengubah status reseller: "+error.message);
+   return;
+  }
+  note("resellerMsg","Status reseller berhasil diperbarui.");
+  await loadResellers();
  });
 }
+
 $("resellerForm").onsubmit=async e=>{
  e.preventDefault();
- const payload={name:$("resellerName").value.trim(),email:$("resellerEmail").value.trim(),phone:$("resellerPhone").value.trim(),password:$("resellerPassword").value};
- if(payload.password.length<8){note("resellerMsg","Password minimal 8 karakter.");return;}
- $("createResellerBtn").disabled=true;note("resellerMsg","Sedang membuat akun reseller…");
+ const payload={
+  name:$("resellerName").value.trim(),
+  email:$("resellerEmail").value.trim(),
+  phone:$("resellerPhone").value.trim(),
+  password:$("resellerPassword").value
+ };
+ if(payload.password.length<8){
+  note("resellerMsg","Password minimal 8 karakter.");
+  return;
+ }
+ $("createResellerBtn").disabled=true;
+ note("resellerMsg","Sedang membuat akun reseller…");
+
  const {data,error}=await db.functions.invoke("bright-responder",{body:payload});
+
  $("createResellerBtn").disabled=false;
- if(error){note("resellerMsg","Gagal membuat reseller: "+error.message);return;}
- if(data?.error){note("resellerMsg","Gagal membuat reseller: "+data.error);return;}
+ if(error){
+  note("resellerMsg","Gagal membuat reseller: "+error.message);
+  return;
+ }
+ if(data?.error){
+  note("resellerMsg","Gagal membuat reseller: "+data.error);
+  return;
+ }
  $("resellerForm").reset();
  note("resellerMsg","Akun reseller berhasil dibuat!\nNama: "+(data.reseller?.name||payload.name)+"\nEmail: "+(data.reseller?.email||payload.email)+"\nKode reseller: "+(data.reseller?.reseller_code||"-")+"\nBerikan email dan password awal kepada reseller.");
  await loadResellers();
@@ -294,37 +444,83 @@ $("resellerForm").onsubmit=async e=>{
 
 /* FORM PESANAN RESELLER */
 function refreshOrderSummary(){
- let total=0;const activeProducts=productCache.filter(p=>p.is_active);
+ let total=0;
+ const activeProducts=productCache.filter(p=>p.is_active);
  activeProducts.forEach(p=>{
   const input=$("resellerProductList").querySelector(`[data-qty="${p.id}"]`);
-  const qty=Math.max(0,Math.floor(Number(input?.value)||0));total+=qty*Number(p.price||0);
+  const qty=Math.max(0,Math.floor(Number(input?.value)||0));
+  total+=qty*Number(p.price||0);
  });
  const dp=Math.round(total*currentDp/100);
- $("orderTotal").textContent=money(total);$("orderDp").textContent=money(dp);$("orderRemaining").textContent=money(total-dp);
+ $("orderTotal").textContent=money(total);
+ $("orderDp").textContent=money(dp);
+ $("orderRemaining").textContent=money(total-dp);
 }
+
 async function submitResellerOrder(e){
  e.preventDefault();
- const periodId=$("orderPeriod").value,pickupDate=$("pickupDate").value;
+
+ const periodId=$("orderPeriod").value;
+ const pickupDate=$("pickupDate").value;
  const period=periodCache.find(p=>String(p.id)===String(periodId));
- if(!period){note("orderMsg","Pilih periode pesanan yang tersedia.");return;}
- if(!period.is_open){note("orderMsg","Periode pesanan sudah ditutup.");return;}
- if(!pickupDate){note("orderMsg","Pilih tanggal pengambilan.");return;}
- if(pickupDate<period.start_date||pickupDate>period.end_date){note("orderMsg","Tanggal pengambilan harus berada dalam periode pesanan.");return;}
+
+ if(!period){
+  note("orderMsg","Pilih periode pesanan yang tersedia.");
+  return;
+ }
+ if(!period.is_open){
+  note("orderMsg","Periode pesanan sudah ditutup.");
+  return;
+ }
+ if(!pickupDate){
+  note("orderMsg","Pilih tanggal pengambilan.");
+  return;
+ }
+ if(pickupDate<period.start_date||pickupDate>period.end_date){
+  note("orderMsg","Tanggal pengambilan harus berada dalam periode pesanan.");
+  return;
+ }
+
  const items=[];
+
  for(const p of productCache.filter(x=>x.is_active)){
   const input=$("resellerProductList").querySelector(`[data-qty="${p.id}"]`);
   const quantity=Math.max(0,Math.floor(Number(input?.value)||0));
-  if(quantity>0)items.push({product_id:p.id,product_name:p.name,quantity,unit_price:Number(p.price),subtotal:quantity*Number(p.price)});
+
+  if(quantity>0){
+   items.push({
+    product_id:p.id,
+    product_name:p.name,
+    quantity:quantity,
+    unit_price:Number(p.price)
+   });
+  }
  }
- if(!items.length){note("orderMsg","Pilih minimal satu produk dan jumlahnya.");return;}
- const total=items.reduce((sum,x)=>sum+x.subtotal,0),dpAmount=Math.round(total*currentDp/100);
+
+ if(!items.length){
+  note("orderMsg","Pilih minimal satu produk dan jumlahnya.");
+  return;
+ }
+
+ /* SUBTOTAL DIHITUNG OTOMATIS OLEH DATABASE */
+ const total=items.reduce((sum,x)=>sum+(x.quantity*x.unit_price),0);
+ const dpAmount=Math.round(total*currentDp/100);
+
  if(!confirm(`Kirim pesanan dengan total ${money(total)} dan DP ${money(dpAmount)}?`))return;
- $("submitOrder").disabled=true;note("orderMsg","Sedang mengirim pesanan…");
+
+ $("submitOrder").disabled=true;
+ note("orderMsg","Sedang mengirim pesanan…");
 
  const {data:{user},error:userError}=await db.auth.getUser();
- if(userError||!user){$("submitOrder").disabled=false;note("orderMsg","Sesi login tidak ditemukan. Silakan login ulang.");return;}
+
+ if(userError||!user){
+  $("submitOrder").disabled=false;
+  note("orderMsg","Sesi login tidak ditemukan. Silakan login ulang.");
+  return;
+ }
 
  const orderNumber="LGT-"+Date.now();
+
  const {data:order,error:orderError}=await db.from("orders").insert({
   order_number:orderNumber,
   reseller_id:user.id,
@@ -338,15 +534,45 @@ async function submitResellerOrder(e){
   order_status:"pending",
   notes:$("orderNotes").value.trim()
  }).select("id").single();
- if(orderError){$("submitOrder").disabled=false;note("orderMsg","Pesanan gagal dibuat: "+orderError.message);return;}
- const orderItems=items.map(x=>({...x,order_id:order.id}));
+
+ if(orderError){
+  $("submitOrder").disabled=false;
+  note("orderMsg","Pesanan gagal dibuat: "+orderError.message);
+  return;
+ }
+
+ /*
+  * PENTING:
+  * Jangan kirim kolom subtotal karena kolom tersebut
+  * merupakan GENERATED ALWAYS di database Supabase.
+  * Database akan menghitung quantity x unit_price sendiri.
+  */
+ const orderItems=items.map(x=>({
+  order_id:order.id,
+  product_id:x.product_id,
+  product_name:x.product_name,
+  quantity:x.quantity,
+  unit_price:x.unit_price
+ }));
+
  const {error:itemError}=await db.from("order_items").insert(orderItems);
+
  $("submitOrder").disabled=false;
- if(itemError){note("orderMsg","Nomor pesanan "+orderNumber+" sudah tercatat, tetapi detail produk gagal disimpan. Jangan kirim ulang. Hubungi admin dan sampaikan nomor pesanan ini. Detail: "+itemError.message);return;}
- $("orderForm").reset();$("resellerProductList").querySelectorAll("[data-qty]").forEach(input=>input.value=0);refreshOrderSummary();
+
+ if(itemError){
+  note("orderMsg","Nomor pesanan "+orderNumber+" sudah tercatat, tetapi detail produk gagal disimpan. Jangan kirim ulang. Hubungi admin dan sampaikan nomor pesanan ini. Detail: "+itemError.message);
+  return;
+ }
+
+ $("orderForm").reset();
+ $("resellerProductList").querySelectorAll("[data-qty]").forEach(input=>input.value=0);
+ refreshOrderSummary();
+
  note("orderMsg","Pesanan berhasil dikirim!\nNomor pesanan: "+orderNumber+"\nTotal: "+money(total)+"\nDP: "+money(dpAmount));
+
  await loadMyOrders();
 }
+
 $("orderForm").onsubmit=submitResellerOrder;
 $("resellerProductList").addEventListener("input",refreshOrderSummary);
 
@@ -356,31 +582,81 @@ async function loadMyOrders(){
 }
 
 async function loadDashboard(user){
- show("login",false);show("app",true);
+ show("login",false);
+ show("app",true);
+
  const {data:profile,error}=await db.from("profiles").select("full_name,role,is_active").eq("id",user.id).maybeSingle();
- if(error){note("dataMsg","Gagal membaca profil: "+error.message);return;}
- if(!profile){note("dataMsg","Profil akun belum ditemukan. Periksa tabel profiles.");return;}
- if(profile.is_active===false){note("dataMsg","Akun tidak aktif. Hubungi admin.");return;}
- currentRole=profile.role;$("welcome").textContent="Halo, "+(profile.full_name||"Pengguna")+"!";$("roleText").textContent="Masuk sebagai: "+profile.role;
+
+ if(error){
+  note("dataMsg","Gagal membaca profil: "+error.message);
+  return;
+ }
+ if(!profile){
+  note("dataMsg","Profil akun belum ditemukan. Periksa tabel profiles.");
+  return;
+ }
+ if(profile.is_active===false){
+  note("dataMsg","Akun tidak aktif. Hubungi admin.");
+  return;
+ }
+
+ currentRole=profile.role;
+ $("welcome").textContent="Halo, "+(profile.full_name||"Pengguna")+"!";
+ $("roleText").textContent="Masuk sebagai: "+profile.role;
+
  const isAdmin=profile.role==="admin";
- show("adminProducts",isAdmin);show("adminResellers",isAdmin);show("adminSettings",isAdmin);show("adminPeriods",isAdmin);show("resellerProducts",profile.role==="reseller");
- if(!isAdmin&&profile.role!=="reseller"){note("dataMsg","Role akun tidak dikenali. Hubungi admin.");return;}
- await loadProducts();await loadPeriods();await loadMyOrders();await loadStoreSettings();
+
+ show("adminProducts",isAdmin);
+ show("adminResellers",isAdmin);
+ show("adminSettings",isAdmin);
+ show("adminPeriods",isAdmin);
+ show("resellerProducts",profile.role==="reseller");
+
+ if(!isAdmin&&profile.role!=="reseller"){
+  note("dataMsg","Role akun tidak dikenali. Hubungi admin.");
+  return;
+ }
+
+ await loadProducts();
+ await loadPeriods();
+ await loadMyOrders();
+ await loadStoreSettings();
+
  if(isAdmin)await loadResellers();
 }
+
 $("loginBtn").onclick=async()=>{
- $("loginBtn").disabled=true;note("loginMsg","Sedang masuk…");
- const {data,error}=await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+ $("loginBtn").disabled=true;
+ note("loginMsg","Sedang masuk…");
+
+ const {data,error}=await db.auth.signInWithPassword({
+  email:$("email").value.trim(),
+  password:$("password").value
+ });
+
  $("loginBtn").disabled=false;
- if(error){note("loginMsg","Login gagal: "+error.message);return;}
- show("loginMsg",false);await loadDashboard(data.user);
+
+ if(error){
+  note("loginMsg","Login gagal: "+error.message);
+  return;
+ }
+
+ show("loginMsg",false);
+ await loadDashboard(data.user);
 };
+
 $("logoutBtn").onclick=async()=>{
- await db.auth.signOut();currentRole=null;show("app",false);show("login",true);$("password").value="";
+ await db.auth.signOut();
+ currentRole=null;
+ show("app",false);
+ show("login",true);
+ $("password").value="";
 };
+
 (async()=>{
- const {data}=await db.auth.getSession();if(data.session)await loadDashboard(data.session.user);
+ const {data}=await db.auth.getSession();
+ if(data.session)await loadDashboard(data.session.user);
 })();
 </script>
 </body>
-</html>
+ </html>
