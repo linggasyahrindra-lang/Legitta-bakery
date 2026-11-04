@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2b1b16" />
+  <title>Legitta Bakery — Since 2009</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{--brown:#2b1b16;--brown2:#493027;--cream:#f7f0e5;--paper:#fffaf2;--gold:#b58b50;--muted:#806f62;--line:#e8dccb}
+    *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--brown);font:15px/1.5 Georgia,serif}
+    header{background:var(--brown);color:#fff8ed;padding:24px 20px;text-align:center;border-bottom:4px solid var(--gold)}
+    .brand{font-size:27px;letter-spacing:3px;font-weight:bold}.tag{font:11px Arial,sans-serif;letter-spacing:2px;color:#d9bd91;margin-top:5px}
+    main{max-width:980px;margin:28px auto;padding:0 16px}.panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px;margin:16px 0;box-shadow:0 8px 24px #3520160b}
+    h2{font-size:21px;margin:0 0 14px}h3{margin:0 0 8px;font-size:17px}
+    label{display:block;font:12px Arial,sans-serif;color:var(--muted);margin:12px 0 5px}
+    input,button{font:15px Arial,sans-serif}input{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--brown)}
+    button{border:0;border-radius:8px;background:var(--brown);color:white;padding:12px 16px;cursor:pointer;margin:10px 8px 0 0}
+    button.secondary{background:#eadcc8;color:var(--brown)}button:disabled{opacity:.5}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.muted{color:var(--muted);font:13px Arial,sans-serif}
+    .hidden{display:none!important}.status{padding:10px 12px;border-radius:8px;background:#f1e8da;margin:12px 0;font:13px Arial,sans-serif;white-space:pre-wrap}
+    .item{border:1px solid var(--line);padding:12px;border-radius:9px;margin:8px 0;background:white}.topline{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+    footer{text-align:center;color:var(--muted);font:12px Arial,sans-serif;padding:30px}
+  </style>
+</head>
+<body>
+<header><div class="brand">LEGITTA BAKERY</div><div class="tag">SINCE 2009 · A TRADITION OF TASTE</div></header>
+<main>
+  <section id="login" class="panel">
+    <h2>Selamat datang</h2>
+    <p class="muted">Masuk untuk mengelola pesanan Legitta Bakery.</p>
+    <label for="email">Email</label><input id="email" type="email" autocomplete="username" placeholder="Email akun" />
+    <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password" />
+    <button id="loginBtn">Masuk</button>
+    <div id="loginMsg" class="status hidden"></div>
+  </section>
+
+  <section id="app" class="hidden">
+    <div class="panel topline"><div><h2 id="welcome">Dashboard</h2><div id="roleText" class="muted"></div></div><button id="logoutBtn" class="secondary">Keluar</button></div>
+    <div id="adminNote" class="panel hidden"><h3>Panel Admin</h3><p class="muted">Login dan pembacaan data dasar sudah disiapkan. Pengelolaan reseller, transaksi, pembayaran, PO, dan laporan akan ditambahkan bertahap setelah struktur database diverifikasi.</p></div>
+    <div class="grid">
+      <div class="panel"><h3>Produk</h3><div id="products" class="muted">Memuat produk…</div></div>
+      <div class="panel"><h3>Periode Pesanan</h3><div id="periods" class="muted">Memuat periode…</div></div>
+    </div>
+    <div class="panel"><h3>Pesanan Saya</h3><div id="orders" class="muted">Memuat pesanan…</div></div>
+    <div id="dataMsg" class="status hidden"></div>
+  </section>
+</main>
+<footer>LEGITTA BAKERY · Since 2009</footer>
+<script>
+  // Konfigurasi publik Supabase. Jangan pernah memasukkan service_role key di sini.
+  const SUPABASE_URL = "https://araecdddcwgidpzwvsly.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_UNxMd5oFYFo6bPMk6xFUVQ_gudkAtaI";
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = id => document.getElementById(id);
+  const show = (id, yes=true) => $(id).classList.toggle("hidden", !yes);
+  const msg = (id, text) => { $(id).textContent=text; show(id,true); };
+  const money = n => new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(n||0);
+
+  async function loadDashboard(user){
+    show("login",false); show("app",true);
+    $("welcome").textContent = "Dashboard Legitta Bakery";
+    const {data:profile,error:profileError}=await db.from("profiles").select("full_name,role,is_active").eq("id",user.id).maybeSingle();
+    if(profileError) { msg("dataMsg","Gagal membaca profil: "+profileError.message); return; }
+    if(!profile){ msg("dataMsg","Profil akun belum ditemukan. Minta admin memeriksa tabel profiles di Supabase."); return; }
+    if(profile.is_active===false){ msg("dataMsg","Akun ini sedang tidak aktif. Hubungi admin."); return; }
+    $("welcome").textContent="Halo, "+(profile.full_name||"Pengguna")+"!";
+    $("roleText").textContent="Masuk sebagai: "+profile.role;
+    show("adminNote",profile.role==="admin");
+
+    const [p,period,o]=await Promise.all([
+      db.from("products").select("*").order("name"),
+      db.from("order_periods").select("*").order("created_at",{ascending:false}).limit(10),
+      db.from("orders").select("*").order("created_at",{ascending:false}).limit(30)
+    ]);
+    if(p.error) $("products").textContent="Belum dapat dimuat: "+p.error.message;
+    else $("products").innerHTML=p.data.length?p.data.map(x=>`<div class="item"><b>${esc(x.name||"Produk")}</b><div class="muted">${money(x.price)}</div></div>`).join(""):"Belum ada produk.";
+    if(period.error) $("periods").textContent="Belum dapat dimuat: "+period.error.message;
+    else $("periods").innerHTML=period.data.length?period.data.map(x=>`<div class="item"><b>${esc(x.name||"Periode pesanan")}</b><div class="muted">${esc(x.status||"")}</div></div>`).join(""):"Belum ada periode pesanan.";
+    if(o.error) $("orders").textContent="Belum dapat dimuat: "+o.error.message;
+    else $("orders").innerHTML=o.data.length?o.data.map(x=>`<div class="item"><b>${esc(x.order_number||"Pesanan")}</b><div class="muted">Status: ${esc(x.status||"-")} · Total: ${money(x.total_amount)}</div></div>`).join(""):"Belum ada pesanan.";
+  }
+  function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+  $("loginBtn").onclick=async()=>{
+    $("loginBtn").disabled=true; msg("loginMsg","Sedang masuk…");
+    const {data,error}=await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+    $("loginBtn").disabled=false;
+    if(error){msg("loginMsg","Login gagal: "+error.message);return;}
+    show("loginMsg",false); await loadDashboard(data.user);
+  };
+  $("logoutBtn").onclick=async()=>{await db.auth.signOut();show("app",false);show("login",true);};
+  (async()=>{const {data}=await db.auth.getSession();if(data.session) await loadDashboard(data.session.user);})();
+</script>
+</body>
+</html>
