@@ -50,4 +50,47 @@ async function loadDashboard(user){show("login",false);show("app",true);const {d
 $("loginBtn").onclick=async()=>{$("loginBtn").disabled=true;note("loginMsg","Sedang masuk…");const {data,error}=await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});$("loginBtn").disabled=false;if(error){note("loginMsg","Login gagal: "+error.message);return;}show("loginMsg",false);await loadDashboard(data.user);};
 $("logoutBtn").onclick=async()=>{await db.auth.signOut();show("app",false);show("login",true);};
 (async()=>{const {data}=await db.auth.getSession();if(data.session)await loadDashboard(data.session.user);})();
-</script></body></html>
+</script><section id="resellerProducts" class="panel hidden">
+<h2>Daftar Produk</h2>
+<p class="muted">Pilih produk dan jumlah pesanan.</p>
+
+<div id="resellerProductList" class="muted">
+Memuat produk…
+</div>
+
+<div class="edit-actions">
+<h2>Buat Pesanan</h2>
+
+<label>Periode Pesanan</label>
+<select id="orderPeriod">
+<option value="">Pilih periode</option>
+</select>
+
+<label>Tanggal Pengambilan</label>
+<input id="pickupDate" type="date">
+
+<label>Catatan Pesanan</label>
+<textarea id="orderNotes" placeholder="Catatan tambahan (opsional)"></textarea>
+
+<div class="item">
+<div class="topline">
+<span>Total Pesanan</span>
+<b id="orderTotal">Rp0</b>
+</div>
+
+<div class="topline">
+<span>DP (<span id="orderDpPercent">50</span>%)</span>
+<b id="orderDp">Rp0</b>
+</div>
+
+<div class="topline">
+<span>Sisa Pembayaran</span>
+<b id="orderRemaining">Rp0</b>
+</div>
+</div>
+
+<button id="submitOrder" type="button">Kirim Pesanan</button>
+
+<div id="orderMsg" class="status hidden"></div>
+</div>
+</section></body></html>
