@@ -84,18 +84,14 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
   <button id="logoutBtn" class="secondary">Keluar</button>
  </div>
 
-<!-- DASHBOARD ADMIN: TIGA SLIDE -->
 <div id="adminDashboard" class="hidden">
-
  <div class="admin-nav">
   <button class="active" data-slide="0">1. Manajemen</button>
   <button data-slide="1">2. Pesanan</button>
   <button data-slide="2">3. Riwayat</button>
  </div>
-
  <div class="slide-count" id="slideCount">HALAMAN 1 DARI 3</div>
 
- <!-- SLIDE 1 -->
  <div id="adminSlide0" class="slide">
   <section id="adminProducts" class="panel">
    <h2>Manajemen Produk</h2>
@@ -157,14 +153,10 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
   </section>
  </div>
 
- <!-- SLIDE 2 -->
  <div id="adminSlide1" class="slide hidden">
   <section class="panel">
    <div class="topline">
-    <div>
-     <h2>Kelola Pesanan</h2>
-     <p class="muted">Pesanan yang masih berjalan dan membutuhkan tindakan admin.</p>
-    </div>
+    <div><h2>Kelola Pesanan</h2><p class="muted">Pesanan yang masih berjalan dan membutuhkan tindakan admin.</p></div>
     <button id="refreshAdminOrders" class="secondary">Muat Ulang</button>
    </div>
    <div id="adminOrderMsg" class="status hidden"></div>
@@ -172,14 +164,10 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
   </section>
  </div>
 
- <!-- SLIDE 3 -->
  <div id="adminSlide2" class="slide hidden">
   <section class="panel">
    <div class="topline">
-    <div>
-     <h2>Riwayat Pesanan</h2>
-     <p class="muted">Pesanan yang sudah selesai atau dibatalkan.</p>
-    </div>
+    <div><h2>Riwayat Pesanan</h2><p class="muted">Pesanan yang sudah selesai atau dibatalkan.</p></div>
     <button id="refreshHistory" class="secondary">Muat Ulang</button>
    </div>
    <label>Cari nomor pesanan atau nama reseller</label>
@@ -200,7 +188,6 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
  </div>
 </div>
 
-<!-- TAMPILAN RESELLER -->
 <section id="resellerArea" class="hidden">
  <section id="resellerProducts" class="panel">
   <h2>Daftar Produk</h2>
@@ -222,7 +209,6 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
    <div id="orderMsg" class="status hidden"></div>
   </div>
  </section>
-
  <div class="grid">
   <div class="panel"><h3>Periode Pesanan</h3><div id="periods" class="muted">Memuat periode…</div></div>
   <div class="panel"><h3>Pesanan Saya</h3><div id="orders" class="muted">Memuat pesanan…</div></div>
@@ -264,7 +250,6 @@ function isHistoryOrder(order){
  return s==="completed"||s==="cancelled"||s==="selesai"||s==="dibatalkan";
 }
 
-/* NAVIGASI TIGA SLIDE ADMIN */
 let activeSlide=0;
 function goSlide(index){
  activeSlide=Math.max(0,Math.min(2,index));
@@ -460,26 +445,112 @@ $("periodForm").onsubmit=async e=>{
 };
 $("cancelPeriodEdit").onclick=resetPeriodForm;
 
-/* MANAJEMEN RESELLER */
+/* MANAJEMEN RESELLER + HAPUS PERMANEN */
 async function loadResellers(){
  $("resellerList").textContent="Memuat reseller…";
- const {data,error}=await db.from("profiles").select("id,full_name,phone,role,reseller_code,is_active,created_at").eq("role","reseller").order("created_at",{ascending:false});
- if(error){$("resellerList").textContent="Gagal memuat reseller: "+error.message;return;}
- const list=data||[];
- if(!list.length){$("resellerList").textContent="Belum ada reseller terdaftar.";return;}
- $("resellerList").innerHTML=list.map(r=>`
- <div class="item"><div class="topline"><b>${esc(r.full_name)}</b><span class="pill">${r.is_active?"Aktif":"Nonaktif"}</span></div>
- <div class="muted">Kode reseller: ${esc(r.reseller_code||"-")}</div><div class="muted">No. HP: ${esc(r.phone||"-")}</div>
- <button class="${r.is_active?"danger":"secondary"}" data-reseller-toggle="${esc(r.id)}" data-active="${r.is_active}">${r.is_active?"Nonaktifkan":"Aktifkan"}</button></div>`).join("");
 
- $("resellerList").querySelectorAll("[data-reseller-toggle]").forEach(b=>b.onclick=async()=>{
-  const next=b.dataset.active!=="true";
-  if(!confirm(`Yakin ingin ${next?"mengaktifkan":"menonaktifkan"} reseller ini?`))return;
-  b.disabled=true;
-  const {error}=await db.from("profiles").update({is_active:next}).eq("id",b.dataset.resellerToggle).eq("role","reseller");
-  if(error){b.disabled=false;note("resellerMsg","Gagal mengubah status reseller: "+error.message);return;}
-  note("resellerMsg","Status reseller berhasil diperbarui.");
-  await loadResellers();
+ const {data,error}=await db.from("profiles")
+  .select("id,full_name,phone,role,reseller_code,is_active,created_at")
+  .eq("role","reseller")
+  .order("created_at",{ascending:false});
+
+ if(error){
+  $("resellerList").textContent="Gagal memuat reseller: "+error.message;
+  return;
+ }
+
+ const list=data||[];
+
+ if(!list.length){
+  $("resellerList").textContent="Belum ada reseller terdaftar.";
+  return;
+ }
+
+ $("resellerList").innerHTML=list.map(r=>`
+  <div class="item">
+   <div class="topline">
+    <b>${esc(r.full_name)}</b>
+    <span class="pill">${r.is_active?"Aktif":"Nonaktif"}</span>
+   </div>
+   <div class="muted">Kode reseller: ${esc(r.reseller_code||"-")}</div>
+   <div class="muted">No. HP: ${esc(r.phone||"-")}</div>
+
+   <button class="${r.is_active?"danger":"secondary"}"
+    data-reseller-toggle="${esc(r.id)}"
+    data-active="${r.is_active}">
+    ${r.is_active?"Nonaktifkan":"Aktifkan"}
+   </button>
+
+   <button class="danger"
+    data-reseller-delete="${esc(r.id)}">
+    Hapus Permanen
+   </button>
+  </div>
+ `).join("");
+
+ // AKTIFKAN / NONAKTIFKAN
+ $("resellerList").querySelectorAll("[data-reseller-toggle]").forEach(b=>{
+  b.onclick=async()=>{
+   const next=b.dataset.active!=="true";
+
+   if(!confirm(`Yakin ingin ${next?"mengaktifkan":"menonaktifkan"} reseller ini?`))return;
+
+   b.disabled=true;
+
+   const {error}=await db.from("profiles")
+    .update({is_active:next})
+    .eq("id",b.dataset.resellerToggle)
+    .eq("role","reseller");
+
+   if(error){
+    b.disabled=false;
+    note("resellerMsg","Gagal mengubah status: "+error.message);
+    return;
+   }
+
+   note("resellerMsg","Status reseller berhasil diperbarui.");
+   await loadResellers();
+  };
+ });
+
+ // HAPUS PERMANEN
+ $("resellerList").querySelectorAll("[data-reseller-delete]").forEach(b=>{
+  b.onclick=async()=>{
+   const id=b.dataset.resellerDelete;
+
+   if(!confirm(
+    "PERINGATAN HAPUS PERMANEN!\n\n"+
+    "Akun login dan profil reseller akan dihapus.\n"+
+    "Reseller yang memiliki riwayat pesanan tidak dapat dihapus.\n\n"+
+    "Tindakan ini tidak dapat dibatalkan.\n\n"+
+    "Lanjutkan?"
+   ))return;
+
+   b.disabled=true;
+   b.textContent="Menghapus…";
+
+   const {data,error}=await db.functions.invoke(
+    "smooth-processor",
+    {body:{reseller_id:id}}
+   );
+
+   if(error){
+    b.disabled=false;
+    b.textContent="Hapus Permanen";
+    note("resellerMsg","Gagal menghapus reseller: "+error.message);
+    return;
+   }
+
+   if(data?.error||!data?.success){
+    b.disabled=false;
+    b.textContent="Hapus Permanen";
+    note("resellerMsg",data?.error||"Penghapusan reseller gagal.");
+    return;
+   }
+
+   note("resellerMsg","Reseller berhasil dihapus permanen.");
+   await loadResellers();
+  };
  });
 }
 
@@ -646,10 +717,8 @@ function orderCard(o,history=false){
 function renderAdminOrderLists(){
  const active=adminOrderCache.filter(o=>!isHistoryOrder(o));
  const history=adminOrderCache.filter(o=>isHistoryOrder(o));
-
  $("activeOrderList").innerHTML=active.length?active.map(o=>orderCard(o,false)).join(""):"Tidak ada pesanan aktif saat ini.";
  $("historyOrderList").innerHTML=history.length?history.map(o=>orderCard(o,true)).join(""):"Belum ada riwayat pesanan.";
-
  attachOrderActions();
  filterHistory();
 }
@@ -666,18 +735,15 @@ function attachOrderActions(){
     select.value=oldStatus;
     return;
    }
-
    select.disabled=true;
    const {error}=await db.from("orders").update({order_status:nextStatus}).eq("id",id);
    select.disabled=false;
-
    if(error){
     note("adminOrderMsg","Gagal mengubah status pesanan: "+error.message);
     select.value=oldStatus;
     return;
    }
-
-   note("adminOrderMsg","Status pesanan "+(order.order_number||"") +" berhasil diubah menjadi "+statusLabel(nextStatus)+".");
+   note("adminOrderMsg","Status pesanan "+(order.order_number||"")+" berhasil diubah menjadi "+statusLabel(nextStatus)+".");
    await loadAdminOrders();
    await loadMyOrders();
   };
@@ -692,7 +758,6 @@ function attachOrderActions(){
     button.textContent="Lihat Detail";
     return;
    }
-
    button.disabled=true;
    button.textContent="Memuat…";
    target.innerHTML='<div class="muted">Memuat detail produk dan pembayaran…</div>';
@@ -705,7 +770,6 @@ function attachOrderActions(){
 
    button.disabled=false;
    button.textContent="Tutup Detail";
-
    let html="<h3>Detail Produk</h3>";
    if(itemResult.error)html+=`<div class="status">Gagal memuat detail produk: ${esc(itemResult.error.message)}</div>`;
    else if(!itemResult.data?.length)html+='<p class="muted">Belum ada detail produk.</p>';
@@ -723,7 +787,6 @@ function attachOrderActions(){
      <div class="muted">Tanggal: ${esc(payment.paid_at||payment.created_at||"-")}</div>
      <div class="muted">Bukti pembayaran: ${esc(payment.proof_url||"Tidak ada")}</div>
     </div>`).join("");
-
    target.innerHTML=html;
   };
  });
@@ -734,11 +797,9 @@ function attachOrderActions(){
    const order=adminOrderCache.find(o=>String(o.id)===String(id));
    if(!order)return;
    if(!confirm("Yakin ingin menghapus pesanan "+(order.order_number||"ini")+"?\n\nPenghapusan hanya diizinkan jika pesanan belum dibayar dan belum memiliki pembayaran masuk. Tindakan ini tidak dapat dibatalkan."))return;
-
    button.disabled=true;
    button.textContent="Menghapus…";
    const {data,error}=await db.rpc("admin_delete_unpaid_order",{p_order_id:id});
-
    if(error){
     button.disabled=false;
     button.textContent="Hapus Pesanan";
@@ -769,7 +830,6 @@ function filterHistory(){
   const statusMatch=!filter||s===filter||(filter==="completed"&&s==="selesai")||(filter==="cancelled"&&s==="dibatalkan");
   return text.includes(query)&&statusMatch;
  });
-
  $("historyOrderList").innerHTML=history.length?history.map(o=>orderCard(o,true)).join(""):"Tidak ada riwayat yang cocok dengan pencarian.";
  attachHistoryDetailActions();
 }
@@ -830,7 +890,6 @@ async function loadDashboard(user){
  show("resellerArea",profile.role==="reseller");
 
  if(!isAdmin&&profile.role!=="reseller"){note("dataMsg","Role akun tidak dikenali. Hubungi admin.");return;}
-
  if(isAdmin)goSlide(0);
 
  await loadProducts();
