@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="id">
 <head>
@@ -37,6 +38,11 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
 .edit-actions{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
 .qty{max-width:110px}
 .summary{border:1px solid var(--line);padding:13px;border-radius:9px;background:#fff}
+.order-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.detail-row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font:13px Arial}
+.detail-row span:last-child{text-align:right}
+.money-summary{background:#fff8ed;border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px}
+.small-button{font-size:12px;padding:8px 10px}
 </style>
 </head>
 <body>
@@ -119,6 +125,19 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
  <div id="periodMsg" class="status hidden"></div>
  <h3 style="margin-top:22px">Daftar Periode</h3>
  <div id="adminPeriodList" class="muted">Memuat periode…</div>
+</section>
+
+<!-- MANAJEMEN PESANAN ADMIN -->
+<section id="adminOrders" class="panel hidden">
+ <div class="topline">
+  <div>
+   <h2>Manajemen Pesanan</h2>
+   <p class="muted">Pantau pesanan seluruh reseller, pembayaran, dan detail produk.</p>
+  </div>
+  <button id="refreshAdminOrders" class="secondary">Muat Ulang</button>
+ </div>
+ <div id="adminOrderMsg" class="status hidden"></div>
+ <div id="adminOrderList" class="muted">Memuat pesanan…</div>
 </section>
 
 <section id="resellerProducts" class="panel hidden">
@@ -502,7 +521,6 @@ async function submitResellerOrder(e){
   return;
  }
 
- /* SUBTOTAL DIHITUNG OTOMATIS OLEH DATABASE */
  const total=items.reduce((sum,x)=>sum+(x.quantity*x.unit_price),0);
  const dpAmount=Math.round(total*currentDp/100);
 
@@ -541,12 +559,6 @@ async function submitResellerOrder(e){
   return;
  }
 
- /*
-  * PENTING:
-  * Jangan kirim kolom subtotal karena kolom tersebut
-  * merupakan GENERATED ALWAYS di database Supabase.
-  * Database akan menghitung quantity x unit_price sendiri.
-  */
  const orderItems=items.map(x=>({
   order_id:order.id,
   product_id:x.product_id,
@@ -581,6 +593,172 @@ async function loadMyOrders(){
  $("orders").textContent=error?"Gagal memuat pesanan: "+error.message:(data?.length?data.map(x=>(x.order_number||"Pesanan")+" — "+(x.order_status||"-")+" — "+money(x.total_amount)).join("\n"):"Belum ada pesanan.");
 }
 
+/* MANAJEMEN PESANAN ADMIN */
+async function loadAdminOrders(){
+ $("adminOrderList").textContent="Memuat seluruh pesanan…";
+ show("adminOrderMsg",false);
+
+ const {data:orders,error}=await db.from("orders")
+  .select("id,order_number,reseller_id,period_id,pickup_date,total_amount,dp_percentage,dp_amount,paid_amount,payment_status,order_status,notes,created_at")
+  .order("created_at",{ascending:false});
+
+ if(error){
+  $("adminOrderList").textContent="Gagal memuat pesanan: "+error.message;
+  return;
+ }
+
+ const list=orders||[];
+ if(!list.length){
+  $("adminOrderList").textContent="Belum ada pesanan yang masuk.";
+  return;
+ }
+
+ const resellerIds=[...new Set(list.map(o=>o.reseller_id).filter(Boolean))];
+ let resellerMap={};
+
+ if(resellerIds.length){
+  const {data:resellers,error:resellerError}=await db.from("profiles")
+   .select("id,full_name,phone")
+   .in("id",resellerIds);
+
+  if(!resellerError){
+   (resellers||[]).forEach(r=>resellerMap[r.id]=r);
+  }
+ }
+
+ $("adminOrderList").innerHTML=list.map(o=>{
+  const reseller=resellerMap[o.reseller_id];
+  const period=periodCache.find(p=>String(p.id)===String(o.period_id));
+  const paid=Number(o.paid_amount)||0;
+  const total=Number(o.total_amount)||0;
+  const remaining=Math.max(0,total-paid);
+  const canDelete=String(o.payment_status||"").toLowerCase()==="unpaid"&&paid<=0;
+
+  return `
+  <div class="item">
+   <div class="topline">
+    <b>${esc(o.order_number||"Pesanan tanpa nomor")}</b>
+    <span class="pill">${esc(o.order_status||"pending")}</span>
+   </div>
+   <div style="margin-top:8px"><b>${esc(reseller?.full_name||"Reseller tidak ditemukan")}</b></div>
+   <div class="muted">HP: ${esc(reseller?.phone||"-")}</div>
+   <div class="muted">Periode: ${esc(period?.name||"Periode tidak ditemukan")}</div>
+   <div class="muted">Tanggal pengambilan: ${esc(o.pickup_date||"-")}</div>
+   <div class="money-summary">
+    <div class="detail-row"><span>Total pesanan</span><b>${money(total)}</b></div>
+    <div class="detail-row"><span>DP (${esc(o.dp_percentage??0)}%)</span><span>${money(o.dp_amount)}</span></div>
+    <div class="detail-row"><span>Sudah dibayar</span><span>${money(paid)}</span></div>
+    <div class="detail-row"><b>Sisa tagihan</b><b>${money(remaining)}</b></div>
+    <div class="detail-row"><span>Status pembayaran</span><b>${esc(o.payment_status||"-")}</b></div>
+   </div>
+   <div class="topline" style="margin-top:8px">
+    <button class="small-button" data-order-detail="${esc(o.id)}">Lihat Detail</button>
+    ${canDelete?`<button class="danger small-button" data-order-delete="${esc(o.id)}">Hapus Pesanan</button>`:""}
+   </div>
+   <div id="orderDetail-${esc(o.id)}" class="order-detail hidden"></div>
+  </div>`;
+ }).join("");
+
+ $("adminOrderList").querySelectorAll("[data-order-detail]").forEach(button=>{
+  button.onclick=async()=>{
+   const id=button.dataset.orderDetail;
+   const target=$("orderDetail-"+id);
+
+   if(!target.classList.contains("hidden")){
+    show(target.id,false);
+    button.textContent="Lihat Detail";
+    return;
+   }
+
+   button.disabled=true;
+   button.textContent="Memuat…";
+   target.innerHTML='<div class="muted">Memuat detail produk dan pembayaran…</div>';
+   show(target.id,true);
+
+   const [itemResult,paymentResult]=await Promise.all([
+    db.from("order_items").select("id,product_id,product_name,quantity,unit_price,subtotal").eq("order_id",id),
+    db.from("payments").select("id,amount,payment_method,proof_url,verification_status,paid_at,created_at").eq("order_id",id).order("created_at",{ascending:false})
+   ]);
+
+   button.disabled=false;
+   button.textContent="Tutup Detail";
+
+   let html="<h3>Detail Produk</h3>";
+
+   if(itemResult.error){
+    html+=`<div class="status">Gagal memuat detail produk: ${esc(itemResult.error.message)}</div>`;
+   }else if(!itemResult.data?.length){
+    html+='<p class="muted">Belum ada detail produk.</p>';
+   }else{
+    html+=itemResult.data.map(item=>`
+     <div class="detail-row">
+      <span>${esc(item.product_name)} × ${esc(item.quantity)}</span>
+      <span>${money(item.subtotal??(Number(item.quantity)*Number(item.unit_price)))}</span>
+     </div>
+     <div class="muted">${money(item.unit_price)} per produk</div>
+    `).join("");
+   }
+
+   html+='<h3 style="margin-top:16px">Riwayat Pembayaran</h3>';
+
+   if(paymentResult.error){
+    html+=`<div class="status">Gagal memuat pembayaran: ${esc(paymentResult.error.message)}</div>`;
+   }else if(!paymentResult.data?.length){
+    html+='<p class="muted">Belum ada data pembayaran.</p>';
+   }else{
+    html+=paymentResult.data.map(payment=>`
+     <div class="item">
+      <div class="detail-row"><b>${money(payment.amount)}</b><span class="pill">${esc(payment.verification_status||"Belum diverifikasi")}</span></div>
+      <div class="muted">Metode: ${esc(payment.payment_method||"-")}</div>
+      <div class="muted">Tanggal: ${esc(payment.paid_at||payment.created_at||"-")}</div>
+      <div class="muted">Bukti pembayaran: ${esc(payment.proof_url||"Tidak ada")}</div>
+     </div>
+    `).join("");
+   }
+
+   target.innerHTML=html;
+  };
+ });
+
+ $("adminOrderList").querySelectorAll("[data-order-delete]").forEach(button=>{
+  button.onclick=async()=>{
+   const id=button.dataset.orderDelete;
+   const order=list.find(o=>String(o.id)===String(id));
+   if(!order)return;
+
+   const confirmDelete=confirm(
+    "Yakin ingin menghapus pesanan "+(order.order_number||"ini")+"?\n\nPenghapusan hanya diizinkan jika pesanan belum dibayar dan belum memiliki pembayaran masuk. Tindakan ini tidak dapat dibatalkan."
+   );
+   if(!confirmDelete)return;
+
+   button.disabled=true;
+   button.textContent="Menghapus…";
+
+   const {data,error}=await db.rpc("admin_delete_unpaid_order",{p_order_id:id});
+
+   if(error){
+    button.disabled=false;
+    button.textContent="Hapus Pesanan";
+    note("adminOrderMsg","Gagal menghapus pesanan: "+error.message);
+    return;
+   }
+
+   if(data?.success===false||data?.error){
+    button.disabled=false;
+    button.textContent="Hapus Pesanan";
+    note("adminOrderMsg","Pesanan tidak dihapus: "+(data.error||data.message||"Tidak memenuhi syarat penghapusan."));
+    return;
+   }
+
+   note("adminOrderMsg","Pesanan "+(order.order_number||"tersebut")+" berhasil dihapus.");
+   await loadAdminOrders();
+   await loadMyOrders();
+  };
+ });
+}
+
+$("refreshAdminOrders").onclick=loadAdminOrders;
+
 async function loadDashboard(user){
  show("login",false);
  show("app",true);
@@ -610,6 +788,7 @@ async function loadDashboard(user){
  show("adminResellers",isAdmin);
  show("adminSettings",isAdmin);
  show("adminPeriods",isAdmin);
+ show("adminOrders",isAdmin);
  show("resellerProducts",profile.role==="reseller");
 
  if(!isAdmin&&profile.role!=="reseller"){
@@ -622,7 +801,10 @@ async function loadDashboard(user){
  await loadMyOrders();
  await loadStoreSettings();
 
- if(isAdmin)await loadResellers();
+ if(isAdmin){
+  await loadResellers();
+  await loadAdminOrders();
+ }
 }
 
 $("loginBtn").onclick=async()=>{
@@ -659,4 +841,4 @@ $("logoutBtn").onclick=async()=>{
 })();
 </script>
 </body>
- </html>
+</html>
