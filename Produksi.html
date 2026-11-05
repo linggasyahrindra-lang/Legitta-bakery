@@ -1,0 +1,65 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2b1b16">
+  <title>Rekap Produksi - Legitta Bakery</title>
+
+  <link rel="stylesheet" href="produksi.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <header class="header">
+    <div>
+      <h1>LEGITTA BAKERY</h1>
+      <p>Rekap Produksi</p>
+    </div>
+    <a href="index.html" class="back">← Dashboard</a>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <h2>Rekap Produksi</h2>
+      <p class="description">
+        Pantau target pesanan, jumlah yang sudah diproduksi,
+        dan sisa produksi setiap periode.
+      </p>
+
+      <label for="productionPeriod">Pilih Periode Pesanan</label>
+      <select id="productionPeriod">
+        <option value="">Memuat periode...</option>
+      </select>
+
+      <button id="refreshProduction">Tampilkan Rekap</button>
+      <p id="productionMsg" class="message"></p>
+    </section>
+
+    <section id="productionSummary" class="hidden">
+      <div class="summary">
+        <div class="summary-card">
+          <span>Total Target</span>
+          <strong id="productionTotalTarget">0</strong>
+        </div>
+        <div class="summary-card">
+          <span>Sudah Diproduksi</span>
+          <strong id="productionTotalDone">0</strong>
+        </div>
+        <div class="summary-card">
+          <span>Sisa Produksi</span>
+          <strong id="productionTotalRemaining">0</strong>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Detail Produksi</h2>
+        <div id="productionList"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="produksi.js"></script>
+</body>
+</html>
