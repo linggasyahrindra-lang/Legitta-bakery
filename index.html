@@ -43,7 +43,9 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
 .detail-row span:last-child{text-align:right}
 .money-summary{background:#fff8ed;border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px}
 .small-button{font-size:12px;padding:8px 10px}
-.admin-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+
+/* NAVIGASI ADMIN: 4 TOMBOL */
+.admin-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
 .admin-nav button{margin:0;padding:13px 5px;border:1px solid var(--line);background:#eadcc8;color:var(--brown);font-weight:bold}
 .admin-nav button.active{background:var(--brown);color:white;border-color:var(--gold)}
 .slide{animation:slideIn .25s ease}
@@ -57,8 +59,11 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
 .payment-actions{display:flex;gap:6px;flex-wrap:wrap}
 .payment-actions button{margin:5px 4px 0 0}
 .payment-status{font:12px Arial;color:var(--muted);margin-top:5px}
+
 @media(max-width:480px){
- .brand{font-size:22px}.panel{padding:15px}
+ .brand{font-size:22px}
+ .panel{padding:15px}
+ .admin-nav{grid-template-columns:repeat(2,1fr)}
  .admin-nav button{font-size:11px;padding:11px 3px}
  .status-select{max-width:100%;width:100%}
 }
@@ -91,6 +96,7 @@ footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
   <button class="active" data-slide="0">1. Manajemen</button>
   <button data-slide="1">2. Pesanan</button>
   <button data-slide="2">3. Riwayat</button>
+  <button type="button" onclick="window.location.href='produksi.html'">4. Produksi</button>
  </div>
  <div class="slide-count" id="slideCount">HALAMAN 1 DARI 3</div>
 
