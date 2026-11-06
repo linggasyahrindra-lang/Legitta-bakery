@@ -1,0 +1,754 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2b1b16">
+  <title>Produksi - Legitta Bakery</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root {
+      --brown: #2b1b16;
+      --brown2: #493027;
+      --cream: #f7f0e8;
+      --gold: #c69b55;
+      --white: #fff;
+      --muted: #8b8179;
+      --green: #287a4b;
+      --red: #b84235;
+      --border: #eadfd3;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--cream);
+      color: var(--brown);
+      font-family: Arial, sans-serif;
+    }
+
+    header {
+      background: var(--brown);
+      color: white;
+      padding: 22px 16px;
+    }
+
+    .header-inner, main {
+      width: min(1100px, 100%);
+      margin: auto;
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+    }
+
+    .brand small {
+      display: block;
+      margin-top: 5px;
+      color: #dfc69e;
+      font-size: 11px;
+      letter-spacing: 2px;
+      font-weight: normal;
+    }
+
+    main { padding: 22px 15px 45px; }
+
+    .top-actions {
+      display: flex;
+      gap: 9px;
+      flex-wrap: wrap;
+    }
+
+    button, select, input { font: inherit; }
+
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 11px 15px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .btn-light {
+      background: #fff;
+      color: var(--brown);
+    }
+
+    .btn-gold {
+      background: var(--gold);
+      color: var(--brown);
+    }
+
+    .btn-brown {
+      background: var(--brown);
+      color: white;
+    }
+
+    .panel {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      padding: 19px;
+      margin-bottom: 17px;
+      box-shadow: 0 4px 15px #2b1b1608;
+    }
+
+    h1 {
+      margin: 0 0 7px;
+      font-size: 24px;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 17px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 7px;
+    }
+
+    select, input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: white;
+      color: var(--brown);
+      padding: 11px;
+      outline: none;
+    }
+
+    select:focus, input:focus {
+      border-color: var(--gold);
+    }
+
+    .period-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 17px;
+    }
+
+    .stat {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 16px;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .stat strong {
+      font-size: 25px;
+    }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 620px;
+    }
+
+    th, td {
+      padding: 13px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    td strong { font-size: 14px; }
+
+    .qty-input {
+      width: 105px;
+      padding: 9px;
+    }
+
+    .progress-track {
+      height: 9px;
+      background: #eee6dd;
+      border-radius: 20px;
+      overflow: hidden;
+      min-width: 90px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 20px;
+      transition: width .2s;
+    }
+
+    .progress-text {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 5px;
+    }
+
+    .remaining {
+      font-weight: 800;
+      color: var(--red);
+    }
+
+    .complete {
+      color: var(--green);
+    }
+
+    .status {
+      display: none;
+      border-radius: 9px;
+      padding: 12px;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .status.show { display: block; }
+    .status.info { background: #f1eadf; color: var(--brown); }
+    .status.success { background: #e7f5eb; color: #20653c; }
+    .status.error { background: #fbe9e6; color: #9d3028; }
+
+    .empty {
+      padding: 30px 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .hidden { display: none !important; }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      padding: 15px;
+      font-size: 11px;
+    }
+
+    @media (max-width: 650px) {
+      .stats { grid-template-columns: 1fr; gap: 8px; }
+      .stat { padding: 13px; }
+      .stat strong { font-size: 22px; }
+      .period-row { grid-template-columns: 1fr; }
+      .top-actions { width: 100%; }
+      .top-actions button { flex: 1; }
+      h1 { font-size: 21px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="brand">
+        LEGITTA BAKERY
+        <small>PRODUCTION MANAGEMENT</small>
+      </div>
+
+      <div class="top-actions">
+        <button class="btn-light" id="backBtn">← Kembali</button>
+        <button class="btn-gold" id="logoutBtn">Keluar</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h1>Rekap Produksi</h1>
+      <p class="muted">
+        Pantau target pesanan, catat hasil produksi, dan lihat sisa produk
+        yang harus diselesaikan.
+      </p>
+
+      <div class="period-row">
+        <div>
+          <label for="periodSelect">Pilih periode pesanan</label>
+          <select id="periodSelect">
+            <option value="">Memuat periode...</option>
+          </select>
+        </div>
+        <button class="btn-brown" id="refreshBtn">Muat ulang</button>
+      </div>
+
+      <div id="message" class="status"></div>
+    </section>
+
+    <section class="stats">
+      <div class="stat">
+        <span>Total target produksi</span>
+        <strong id="totalTarget">0</strong>
+        <div class="muted">Semua produk</div>
+      </div>
+
+      <div class="stat">
+        <span>Total sudah diproduksi</span>
+        <strong id="totalProduced">0</strong>
+        <div class="muted">Jumlah yang sudah dicatat</div>
+      </div>
+
+      <div class="stat">
+        <span>Total sisa produksi</span>
+        <strong id="totalRemaining">0</strong>
+        <div class="muted">Belum mencapai target</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Daftar target produk</h2>
+      <p class="muted">
+        Isi jumlah produk yang sudah selesai dibuat, lalu tekan Simpan.
+        Data tersimpan berdasarkan periode dan produk.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nama produk</th>
+              <th>Target</th>
+              <th>Diproduksi</th>
+              <th>Sisa</th>
+              <th>Progres</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="productionBody">
+            <tr>
+              <td colspan="6" class="empty">Memuat data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="emptyState" class="empty hidden">
+        Belum ada pesanan produk pada periode ini.
+      </div>
+    </section>
+  </main>
+
+  <footer>LEGITTA BAKERY · Production Management</footer>
+
+  <script>
+    // =====================================================
+    // KONFIGURASI SUPABASE - SAMA DENGAN INDEX.HTML
+    // =====================================================
+
+    const SUPABASE_URL = "https://araecdddcwgidpzwvsly.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_UNxMd5oFYFo6bPMk6xFUVQ_gudkAtaI";
+
+    const db = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+    const $ = id => document.getElementById(id);
+
+    let currentPeriodId = null;
+    let productionRows = [];
+
+    function numberFormat(value) {
+      return Number(value || 0).toLocaleString("id-ID");
+    }
+
+    function showMessage(message, type = "info") {
+      const el = $("message");
+      el.textContent = message;
+      el.className = "status show " + type;
+    }
+
+    function hideMessage() {
+      $("message").className = "status";
+      $("message").textContent = "";
+    }
+
+    function escapeHTML(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      })[char]);
+    }
+
+    // =====================================================
+    // CEK LOGIN DAN HAK AKSES ADMIN
+    // =====================================================
+
+    async function checkAdmin() {
+      const { data: userData, error: userError } = await db.auth.getUser();
+
+      if (userError || !userData.user) {
+        window.location.href = "index.html";
+        return false;
+      }
+
+      const { data: profile, error: profileError } = await db
+        .from("profiles")
+        .select("role")
+        .eq("id", userData.user.id)
+        .maybeSingle();
+
+      if (profileError || !profile || profile.role !== "admin") {
+        alert("Halaman ini hanya dapat diakses oleh admin.");
+        window.location.href = "index.html";
+        return false;
+      }
+
+      return true;
+    }
+
+    // =====================================================
+    // MEMUAT PERIODE PESANAN
+    // =====================================================
+
+    async function loadPeriods() {
+      const select = $("periodSelect");
+      select.innerHTML = '<option value="">Memuat periode...</option>';
+
+      const { data, error } = await db
+        .from("order_periods")
+        .select("id,name,start_date,end_date,is_open")
+        .order("start_date", { ascending: false });
+
+      if (error) {
+        showMessage("Gagal memuat periode: " + error.message, "error");
+        select.innerHTML = '<option value="">Gagal memuat periode</option>';
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        select.innerHTML = '<option value="">Belum ada periode</option>';
+        renderEmpty("Belum ada periode pesanan.");
+        return;
+      }
+
+      select.innerHTML = data.map(period => {
+        const label = escapeHTML(period.name || "Periode tanpa nama");
+        return `<option value="${escapeHTML(period.id)}">${label}</option>`;
+      }).join("");
+
+      currentPeriodId = select.value;
+      await loadProduction();
+    }
+
+    // =====================================================
+    // MENGHITUNG TARGET DARI ORDER_ITEMS
+    // =====================================================
+
+    async function loadProduction() {
+      hideMessage();
+
+      const periodId = $("periodSelect").value;
+      currentPeriodId = periodId;
+
+      if (!periodId) {
+        renderEmpty("Silakan pilih periode pesanan.");
+        return;
+      }
+
+      $("productionBody").innerHTML =
+        '<tr><td colspan="6" class="empty">Menghitung target produksi...</td></tr>';
+
+      const { data: items, error: itemError } = await db
+        .from("order_items")
+        .select(`
+          product_id,
+          product_name,
+          quantity,
+          orders!inner (
+            period_id,
+            order_status
+          )
+        `)
+        .eq("orders.period_id", periodId)
+        .neq("orders.order_status", "cancelled");
+
+      if (itemError) {
+        showMessage(
+          "Gagal mengambil data pesanan: " + itemError.message,
+          "error"
+        );
+        renderEmpty("Data pesanan tidak dapat dimuat.");
+        return;
+      }
+
+      // Gabungkan item dengan product_id yang sama.
+      const targets = new Map();
+
+      (items || []).forEach(item => {
+        const productId = item.product_id;
+        if (!productId) return;
+
+        const quantity = Number(item.quantity || 0);
+
+        if (!targets.has(productId)) {
+          targets.set(productId, {
+            product_id: productId,
+            product_name: item.product_name || "Produk tanpa nama",
+            target_quantity: 0,
+            produced_quantity: 0
+          });
+        }
+
+        const row = targets.get(productId);
+        row.target_quantity += quantity;
+
+        if (!row.product_name && item.product_name) {
+          row.product_name = item.product_name;
+        }
+      });
+
+      // Ambil catatan produksi yang pernah disimpan.
+      const { data: progress, error: progressError } = await db
+        .from("production_progress")
+        .select("product_id,produced_quantity")
+        .eq("period_id", periodId);
+
+      if (progressError) {
+        showMessage(
+          "Gagal mengambil catatan produksi: " + progressError.message +
+          ". Pastikan tabel production_progress sudah dibuat.",
+          "error"
+        );
+        renderEmpty("Catatan produksi tidak dapat dimuat.");
+        return;
+      }
+
+      (progress || []).forEach(record => {
+        const row = targets.get(record.product_id);
+        if (row) {
+          row.produced_quantity = Number(record.produced_quantity || 0);
+        }
+      });
+
+      productionRows = Array.from(targets.values()).sort((a, b) =>
+        a.product_name.localeCompare(b.product_name, "id")
+      );
+
+      renderProduction();
+    }
+
+    // =====================================================
+    // TAMPILKAN REKAP PRODUKSI
+    // =====================================================
+
+    function renderProduction() {
+      const body = $("productionBody");
+
+      if (!productionRows.length) {
+        renderEmpty("Belum ada pesanan produk pada periode ini.");
+        updateStats();
+        return;
+      }
+
+      $("emptyState").classList.add("hidden");
+
+      body.innerHTML = productionRows.map((row, index) => {
+        const target = row.target_quantity;
+        const produced = row.produced_quantity;
+        const remaining = Math.max(0, target - produced);
+        const percent = target > 0
+          ? Math.min(100, Math.round((produced / target) * 100))
+          : 0;
+
+        return `
+          <tr>
+            <td><strong>${escapeHTML(row.product_name)}</strong></td>
+            <td>${numberFormat(target)}</td>
+            <td>
+              <input
+                class="qty-input"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                id="qty-${index}"
+                value="${produced}"
+                aria-label="Jumlah produksi ${escapeHTML(row.product_name)}"
+              >
+            </td>
+            <td>
+              <span class="${remaining === 0 ? "complete" : "remaining"}">
+                ${numberFormat(remaining)}
+              </span>
+            </td>
+            <td>
+              <div class="progress-track">
+                <div class="progress-fill" style="width:${percent}%"></div>
+              </div>
+              <div class="progress-text">${percent}%</div>
+            </td>
+            <td>
+              <button
+                class="btn-brown"
+                type="button"
+                id="save-${index}"
+                onclick="saveProduction(${index})"
+              >Simpan</button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      updateStats();
+    }
+
+    function renderEmpty(message) {
+      $("productionBody").innerHTML = "";
+      $("emptyState").textContent = message;
+      $("emptyState").classList.remove("hidden");
+      $("totalTarget").textContent = "0";
+      $("totalProduced").textContent = "0";
+      $("totalRemaining").textContent = "0";
+    }
+
+    function updateStats() {
+      const target = productionRows.reduce(
+        (sum, row) => sum + row.target_quantity, 0
+      );
+
+      const produced = productionRows.reduce(
+        (sum, row) => sum + row.produced_quantity, 0
+      );
+
+      const remaining = Math.max(0, target - produced);
+
+      $("totalTarget").textContent = numberFormat(target);
+      $("totalProduced").textContent = numberFormat(produced);
+      $("totalRemaining").textContent = numberFormat(remaining);
+    }
+
+    // =====================================================
+    // SIMPAN JUMLAH PRODUKSI KE SUPABASE
+    // =====================================================
+
+    async function saveProduction(index) {
+      const row = productionRows[index];
+      if (!row || !currentPeriodId) return;
+
+      const input = $("qty-" + index);
+      const button = $("save-" + index);
+
+      const value = Number(input.value);
+
+      if (!Number.isInteger(value) || value < 0) {
+        showMessage("Jumlah produksi harus berupa angka bulat minimal 0.", "error");
+        input.focus();
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = "Menyimpan...";
+
+      const { error } = await db
+        .from("production_progress")
+        .upsert({
+          period_id: currentPeriodId,
+          product_id: row.product_id,
+          produced_quantity: value,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: "period_id,product_id"
+        });
+
+      button.disabled = false;
+      button.textContent = "Simpan";
+
+      if (error) {
+        showMessage("Gagal menyimpan produksi: " + error.message, "error");
+        return;
+      }
+
+      row.produced_quantity = value;
+
+      showMessage(
+        "Catatan produksi " + row.product_name + " berhasil disimpan.",
+        "success"
+      );
+
+      renderProduction();
+    }
+
+    // =====================================================
+    // TOMBOL DAN EVENT
+    // =====================================================
+
+    $("periodSelect").addEventListener("change", loadProduction);
+
+    $("refreshBtn").addEventListener("click", loadProduction);
+
+    $("backBtn").addEventListener("click", () => {
+      window.location.href = "index.html";
+    });
+
+    $("logoutBtn").addEventListener("click", async () => {
+      await db.auth.signOut();
+      window.location.href = "index.html";
+    });
+
+    // =====================================================
+    // MULAI APLIKASI
+    // =====================================================
+
+    async function init() {
+      if (!window.supabase) {
+        showMessage("Supabase gagal dimuat. Periksa koneksi internet.", "error");
+        return;
+      }
+
+      const allowed = await checkAdmin();
+      if (!allowed) return;
+
+      await loadPeriods();
+    }
+
+    init();
+  </script>
+</body>
+</html>
