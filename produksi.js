@@ -1,360 +1,606 @@
+// =====================================================
+// LEGITTA BAKERY - PRODUCTION MANAGEMENT
+// =====================================================
 
+// KONFIGURASI SUPABASE
 const SUPABASE_URL = "https://araecdddcwgidpzwvsly.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_UNxMd5oFYFo6bPMk6xFUVQ_gudkAtaI";
 
-const db = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+const db = window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
 
 const $ = id => document.getElementById(id);
 
+let currentPeriodId = null;
 let productionRows = [];
-let selectedPeriod = null;
+let isLoading = false;
 
-function message(text, error = false) {
-  $("productionMsg").textContent = text;
-  $("productionMsg").style.color = error ? "#b94b43" : "#39845a";
-}
+// =====================================================
+// FORMAT ANGKA
+// =====================================================
 
-function formatNumber(value) {
+function numberFormat(value) {
   return Number(value || 0).toLocaleString("id-ID");
 }
 
-async function fetchAll(queryBuilder) {
-  const results = [];
-  const pageSize = 1000;
+// =====================================================
+// PESAN NOTIFIKASI
+// =====================================================
 
-  for (let start = 0; ; start += pageSize) {
-    const { data, error } = await queryBuilder
-      .range(start, start + pageSize - 1);
+function showMessage(message, type = "info") {
+  const el = $("message");
 
-    if (error) throw error;
-
-    results.push(...(data || []));
-
-    if (!data || data.length < pageSize) break;
-  }
-
-  return results;
+  el.textContent = message;
+  el.className = "message show " + type;
 }
 
-// Memastikan pengguna sudah login dan merupakan admin
-async function checkAdmin() {
-  const { data: authData, error: authError } =
-    await db.auth.getUser();
+function hideMessage() {
+  $("message").textContent = "";
+  $("message").className = "message";
+}
 
-  if (authError || !authData.user) {
-    throw new Error("Silakan login terlebih dahulu melalui dashboard.");
+// =====================================================
+// ESCAPE HTML
+// =====================================================
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+}
+
+// =====================================================
+// SIDEBAR MOBILE
+// =====================================================
+
+function setupSidebar() {
+  const sidebar = $("sidebar");
+  const toggle = $("menuToggle");
+  const overlay = $("sidebarOverlay");
+
+  function closeSidebar() {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("show");
   }
 
-  const { data: profile, error } = await db
+  toggle.addEventListener("click", () => {
+    sidebar.classList.toggle("open");
+    overlay.classList.toggle("show");
+  });
+
+  overlay.addEventListener("click", closeSidebar);
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 750) {
+      closeSidebar();
+    }
+  });
+}
+
+// =====================================================
+// CEK LOGIN DAN HAK AKSES ADMIN
+// =====================================================
+
+async function checkAdmin() {
+  const { data: userData, error: userError } = await db.auth.getUser();
+
+  if (userError || !userData.user) {
+    window.location.href = "index.html";
+    return false;
+  }
+
+  const { data: profile, error: profileError } = await db
     .from("profiles")
     .select("role")
-    .eq("id", authData.user.id)
-    .single();
+    .eq("id", userData.user.id)
+    .maybeSingle();
 
-  if (error) throw error;
-
-  if (profile.role !== "admin") {
-    throw new Error("Halaman ini hanya dapat diakses admin.");
+  if (profileError || !profile || profile.role !== "admin") {
+    alert("Halaman ini hanya dapat diakses oleh admin.");
+    window.location.href = "index.html";
+    return false;
   }
+
+  return true;
 }
 
-// Mengambil periode pesanan
-async function loadProductionPeriods() {
+// =====================================================
+// MEMUAT PERIODE PESANAN
+// =====================================================
+
+async function loadPeriods() {
+  const select = $("periodSelect");
+
+  select.innerHTML = '<option value="">Memuat periode...</option>';
+
   const { data, error } = await db
     .from("order_periods")
     .select("id,name,start_date,end_date,is_open")
     .order("start_date", { ascending: false });
 
-  if (error) throw error;
-
-  const select = $("productionPeriod");
-  select.innerHTML = "";
+  if (error) {
+    showMessage("Gagal memuat periode: " + error.message, "error");
+    select.innerHTML = '<option value="">Gagal memuat periode</option>';
+    renderEmpty("Periode tidak dapat dimuat.");
+    return;
+  }
 
   if (!data || data.length === 0) {
     select.innerHTML = '<option value="">Belum ada periode</option>';
+    productionRows = [];
+    renderEmpty("Belum ada periode pesanan.");
+    updateStats();
     return;
   }
 
-  data.forEach(period => {
-    const option = document.createElement("option");
-    option.value = period.id;
-    option.textContent = period.name;
-    select.appendChild(option);
-  });
+  select.innerHTML = data.map(period => {
+    const label = escapeHTML(period.name || "Periode tanpa nama");
 
-  select.value = data[0].id;
-  selectedPeriod = data[0].id;
+    return `
+      <option value="${escapeHTML(period.id)}">
+        ${label}
+      </option>
+    `;
+  }).join("");
+
+  currentPeriodId = select.value;
+
+  await loadProduction();
 }
 
-// Mengambil pesanan dan menghitung target produk
-async function getProductionTargets(periodId) {
-  const orders = await fetchAll(
-    db.from("orders")
-      .select("id,order_status")
-      .eq("period_id", periodId)
-      .neq("order_status", "cancelled")
-      .order("id")
-  );
+// =====================================================
+// MEMUAT TARGET PRODUKSI
+// =====================================================
 
-  if (!orders.length) return [];
-
-  const orderIds = orders.map(order => order.id);
-  const itemResults = [];
-
-  // Mengambil item secara bertahap agar aman untuk banyak pesanan
-  for (let i = 0; i < orderIds.length; i += 200) {
-    const batchIds = orderIds.slice(i, i + 200);
-
-    const items = await fetchAll(
-      db.from("order_items")
-        .select("product_id,product_name,quantity")
-        .in("order_id", batchIds)
-        .order("id")
-    );
-
-    itemResults.push(...items);
-  }
-
-  const grouped = new Map();
-
-  itemResults.forEach(item => {
-    const name = item.product_name || "Produk tanpa nama";
-    const key = item.product_id
-      ? "id:" + item.product_id
-      : "name:" + name;
-
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        product_id: item.product_id,
-        product_name: name,
-        target: 0,
-        produced: 0
-      });
-    }
-
-    grouped.get(key).target += Number(item.quantity || 0);
-  });
-
-  return Array.from(grouped.values()).sort((a, b) =>
-    a.product_name.localeCompare(b.product_name, "id")
-  );
-}
-
-// Mengambil progres produksi yang sudah tersimpan
-async function getSavedProgress(periodId) {
-  const { data, error } = await db
-    .from("production_progress")
-    .select("product_id,produced_quantity")
-    .eq("period_id", periodId);
-
-  if (error) throw error;
-
-  return new Map(
-    (data || []).map(item => [
-      item.product_id,
-      Number(item.produced_quantity || 0)
-    ])
-  );
-}
-
-// Menghitung dan menampilkan rekap
-function renderProduction() {
-  const list = $("productionList");
-  list.innerHTML = "";
-
-  const totalTarget = productionRows.reduce(
-    (sum, row) => sum + row.target, 0
-  );
-
-  const totalDone = productionRows.reduce(
-    (sum, row) => sum + row.produced, 0
-  );
-
-  const totalRemaining = productionRows.reduce(
-    (sum, row) => sum + Math.max(0, row.target - row.produced), 0
-  );
-
-  $("productionTotalTarget").textContent = formatNumber(totalTarget);
-  $("productionTotalDone").textContent = formatNumber(totalDone);
-  $("productionTotalRemaining").textContent = formatNumber(totalRemaining);
-
-  if (!productionRows.length) {
-    list.innerHTML =
-      '<div class="empty">Belum ada pesanan produk pada periode ini.</div>';
-    $("productionSummary").classList.remove("hidden");
-    return;
-  }
-
-  productionRows.forEach((row, index) => {
-    const percent = row.target > 0
-      ? Math.min(100, Math.round(row.produced / row.target * 100))
-      : 0;
-
-    const remaining = Math.max(0, row.target - row.produced);
-    const card = document.createElement("div");
-    card.className = "production-card";
-
-    const title = document.createElement("h3");
-    title.textContent = row.product_name;
-
-    const numbers = document.createElement("div");
-    numbers.className = "production-numbers";
-    numbers.textContent =
-      `Target: ${formatNumber(row.target)} | ` +
-      `Diproduksi: ${formatNumber(row.produced)} | ` +
-      `Sisa: ${formatNumber(remaining)}`;
-
-    const track = document.createElement("div");
-    track.className = "progress-track";
-
-    const fill = document.createElement("div");
-    fill.className = "progress-fill";
-    fill.style.width = percent + "%";
-    track.appendChild(fill);
-
-    const percentText = document.createElement("div");
-    percentText.className = "production-percent";
-    percentText.textContent = percent + "% selesai";
-
-    card.append(title, numbers, track, percentText);
-
-    if (row.product_id) {
-      const inputArea = document.createElement("div");
-      inputArea.className = "production-input";
-
-      const input = document.createElement("input");
-      input.type = "number";
-      input.min = "0";
-      input.step = "1";
-      input.max = String(row.target);
-      input.value = String(row.produced);
-      input.setAttribute("aria-label", "Jumlah sudah diproduksi");
-
-      const button = document.createElement("button");
-      button.textContent = "Simpan";
-
-      button.addEventListener("click", async () => {
-        const value = input.value.trim();
-        const quantity = Number(value);
-
-        if (
-          value === "" ||
-          !Number.isSafeInteger(quantity) ||
-          quantity < 0 ||
-          quantity > row.target
-        ) {
-          alert("Masukkan jumlah produksi antara 0 dan target.");
-          return;
-        }
-
-        button.disabled = true;
-        button.textContent = "Menyimpan...";
-
-        try {
-          const { error } = await db
-            .from("production_progress")
-            .upsert({
-              period_id: selectedPeriod,
-              product_id: row.product_id,
-              produced_quantity: quantity,
-              updated_at: new Date().toISOString()
-            }, {
-              onConflict: "period_id,product_id"
-            });
-
-          if (error) throw error;
-
-          row.produced = quantity;
-          renderProduction();
-          message("Jumlah produksi berhasil disimpan.");
-        } catch (error) {
-          console.error(error);
-          alert("Gagal menyimpan: " + error.message);
-          button.disabled = false;
-          button.textContent = "Simpan";
-        }
-      });
-
-      inputArea.append(input, button);
-      card.appendChild(inputArea);
-    } else {
-      const warning = document.createElement("p");
-      warning.className = "message";
-      warning.textContent =
-        "Produk ini tidak memiliki ID produk, sehingga progresnya belum dapat disimpan.";
-      card.appendChild(warning);
-    }
-
-    list.appendChild(card);
-  });
-
-  $("productionSummary").classList.remove("hidden");
-}
-
-// Memuat rekap periode terpilih
 async function loadProduction() {
-  const periodId = $("productionPeriod").value;
+  if (isLoading) return;
+
+  const periodId = $("periodSelect").value;
+
+  currentPeriodId = periodId;
+
+  hideMessage();
 
   if (!periodId) {
-    message("Pilih periode terlebih dahulu.", true);
+    productionRows = [];
+    renderEmpty("Silakan pilih periode pesanan.");
+    updateStats();
     return;
   }
 
-  selectedPeriod = periodId;
-  $("refreshProduction").disabled = true;
-  message("Sedang menghitung pesanan...");
+  isLoading = true;
+
+  $("productionBody").innerHTML = `
+    <div class="loading-state">
+      <div class="loader"></div>
+      <span>Menghitung target produksi...</span>
+    </div>
+  `;
+
+  $("emptyState").classList.add("hidden");
 
   try {
-    const [targets, saved] = await Promise.all([
-      getProductionTargets(periodId),
-      getSavedProgress(periodId)
-    ]);
 
-    productionRows = targets.map(row => ({
-      ...row,
-      produced: row.product_id
-        ? (saved.get(row.product_id) || 0)
-        : 0
-    }));
+    // Ambil pesanan berdasarkan periode.
+    const { data: items, error: itemError } = await db
+      .from("order_items")
+      .select(`
+        product_id,
+        product_name,
+        quantity,
+        orders!inner (
+          period_id,
+          order_status
+        )
+      `)
+      .eq("orders.period_id", periodId)
+      .neq("orders.order_status", "cancelled");
 
-    renderProduction();
-    message("Rekap produksi berhasil dimuat.");
-  } catch (error) {
-    console.error(error);
-    message("Gagal memuat rekap: " + error.message, true);
-  } finally {
-    $("refreshProduction").disabled = false;
-  }
-}
+    if (itemError) {
+      throw new Error(
+        "Gagal mengambil data pesanan: " + itemError.message
+      );
+    }
 
-// Inisialisasi halaman
-async function initProduction() {
-  try {
-    message("Memeriksa akses admin...");
-    await checkAdmin();
-    await loadProductionPeriods();
+    // Gabungkan target produk yang sama.
+    const targets = new Map();
 
-    $("productionPeriod").addEventListener("change", () => {
-      selectedPeriod = $("productionPeriod").value;
+    (items || []).forEach(item => {
+      const productId = item.product_id;
+
+      if (!productId) return;
+
+      const quantity = Number(item.quantity || 0);
+
+      if (!targets.has(productId)) {
+        targets.set(productId, {
+          product_id: productId,
+          product_name: item.product_name || "Produk tanpa nama",
+          target_quantity: 0,
+          produced_quantity: 0
+        });
+      }
+
+      const row = targets.get(productId);
+
+      row.target_quantity += quantity;
+
+      if (!row.product_name && item.product_name) {
+        row.product_name = item.product_name;
+      }
     });
 
-    $("refreshProduction").addEventListener(
-      "click",
-      loadProduction
+    // Ambil progres produksi yang tersimpan.
+    const { data: progress, error: progressError } = await db
+      .from("production_progress")
+      .select("product_id,produced_quantity")
+      .eq("period_id", periodId);
+
+    if (progressError) {
+      throw new Error(
+        "Gagal mengambil catatan produksi: " +
+        progressError.message +
+        ". Pastikan akses tabel production_progress tersedia."
+      );
+    }
+
+    // Masukkan hasil produksi ke data target.
+    (progress || []).forEach(record => {
+      const row = targets.get(record.product_id);
+
+      if (row) {
+        row.produced_quantity = Number(
+          record.produced_quantity || 0
+        );
+      }
+    });
+
+    productionRows = Array.from(targets.values()).sort(
+      (a, b) => a.product_name.localeCompare(b.product_name, "id")
     );
 
-    if (selectedPeriod) {
-      await loadProduction();
-    } else {
-      message("Belum ada periode pesanan.", true);
-    }
+    renderProduction();
+
   } catch (error) {
-    console.error(error);
-    message(error.message, true);
+
+    showMessage(error.message, "error");
+
+    productionRows = [];
+    renderEmpty("Data produksi tidak dapat dimuat.");
+    updateStats();
+
+  } finally {
+    isLoading = false;
   }
 }
 
-initProduction();
+// =====================================================
+// MENGHITUNG PROGRES PRODUK
+// =====================================================
+
+function getProgress(row) {
+  const target = Number(row.target_quantity || 0);
+  const produced = Number(row.produced_quantity || 0);
+
+  if (target <= 0) return 0;
+
+  return Math.min(
+    100,
+    Math.round((produced / target) * 100)
+  );
+}
+
+// =====================================================
+// MENAMPILKAN PRODUKSI
+// =====================================================
+
+function renderProduction() {
+  const body = $("productionBody");
+
+  if (!productionRows.length) {
+    renderEmpty("Belum ada pesanan produk pada periode ini.");
+    updateStats();
+    return;
+  }
+
+  $("emptyState").classList.add("hidden");
+
+  $("productCount").textContent =
+    productionRows.length + " Produk";
+
+  body.innerHTML = productionRows.map((row, index) => {
+
+    const target = Number(row.target_quantity || 0);
+    const produced = Number(row.produced_quantity || 0);
+
+    const remaining = Math.max(0, target - produced);
+    const percent = getProgress(row);
+
+    return `
+      <article class="production-card">
+
+        <div class="production-card-top">
+          <h3>${escapeHTML(row.product_name)}</h3>
+          <span class="product-number">
+            PRODUK ${String(index + 1).padStart(2, "0")}
+          </span>
+        </div>
+
+        <div class="production-numbers">
+
+          <div class="production-number-box">
+            <span>Target</span>
+            <strong>${numberFormat(target)}</strong>
+          </div>
+
+          <div class="production-number-box done">
+            <span>Diproduksi</span>
+            <strong>${numberFormat(produced)}</strong>
+          </div>
+
+          <div class="production-number-box left">
+            <span>Sisa</span>
+            <strong>${numberFormat(remaining)}</strong>
+          </div>
+
+        </div>
+
+        <div class="product-progress-heading">
+          <span>Progres produksi</span>
+          <span class="production-percent">${percent}%</span>
+        </div>
+
+        <div class="progress-track">
+          <div
+            class="progress-fill"
+            style="width:${percent}%"
+          ></div>
+        </div>
+
+        <div class="production-input">
+
+          <div class="input-group">
+            <label for="qty-${index}">
+              JUMLAH SUDAH DIPRODUKSI
+            </label>
+
+            <input
+              type="number"
+              id="qty-${index}"
+              min="0"
+              step="1"
+              inputmode="numeric"
+              value="${produced}"
+              aria-label="Jumlah produksi ${escapeHTML(row.product_name)}"
+            >
+          </div>
+
+          <button
+            type="button"
+            class="save-button"
+            id="save-${index}"
+            onclick="saveProduction(${index})"
+          >
+            Simpan
+          </button>
+
+        </div>
+
+      </article>
+    `;
+
+  }).join("");
+
+  updateStats();
+}
+
+// =====================================================
+// MENAMPILKAN KEADAAN KOSONG
+// =====================================================
+
+function renderEmpty(message) {
+  $("productionBody").innerHTML = "";
+
+  $("emptyState").innerHTML = `
+    <div class="empty-icon">▤</div>
+    <strong>Belum ada data produksi</strong>
+    <p>${escapeHTML(message)}</p>
+  `;
+
+  $("emptyState").classList.remove("hidden");
+
+  $("productCount").textContent = "0 Produk";
+}
+
+// =====================================================
+// MEMPERBARUI RINGKASAN
+// =====================================================
+
+function updateStats() {
+
+  const target = productionRows.reduce(
+    (sum, row) => sum + Number(row.target_quantity || 0),
+    0
+  );
+
+  const produced = productionRows.reduce(
+    (sum, row) => sum + Number(row.produced_quantity || 0),
+    0
+  );
+
+  const remaining = productionRows.reduce(
+    (sum, row) => sum + Math.max(
+      0,
+      Number(row.target_quantity || 0) -
+      Number(row.produced_quantity || 0)
+    ),
+    0
+  );
+
+  const percent = target > 0
+    ? Math.min(100, Math.round((produced / target) * 100))
+    : 0;
+
+  $("totalTarget").textContent = numberFormat(target);
+  $("totalProduced").textContent = numberFormat(produced);
+  $("totalRemaining").textContent = numberFormat(remaining);
+
+  $("overallPercent").textContent = percent + "%";
+  $("overallProgress").style.width = percent + "%";
+
+  $("overallProducedText").textContent =
+    numberFormat(produced) + " produk selesai";
+
+  $("overallTargetText").textContent =
+    "Target " + numberFormat(target) + " produk";
+}
+
+// =====================================================
+// SIMPAN PRODUKSI
+// =====================================================
+
+async function saveProduction(index) {
+
+  const row = productionRows[index];
+
+  if (!row || !currentPeriodId) return;
+
+  const input = $("qty-" + index);
+  const button = $("save-" + index);
+
+  if (!input || !button) return;
+
+  const value = Number(input.value);
+
+  if (!Number.isInteger(value) || value < 0) {
+    showMessage(
+      "Jumlah produksi harus berupa angka bulat minimal 0.",
+      "error"
+    );
+
+    input.focus();
+    return;
+  }
+
+  // Cegah klik berulang.
+  button.disabled = true;
+  button.textContent = "Menyimpan...";
+
+  input.disabled = true;
+
+  try {
+
+    const { error } = await db
+      .from("production_progress")
+      .upsert({
+        period_id: currentPeriodId,
+        product_id: row.product_id,
+        produced_quantity: value,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "period_id,product_id"
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    row.produced_quantity = value;
+
+    showMessage(
+      "Catatan produksi " + row.product_name +
+      " berhasil disimpan.",
+      "success"
+    );
+
+    // Perbarui tampilan setelah berhasil disimpan.
+    renderProduction();
+
+  } catch (error) {
+
+    showMessage(
+      "Gagal menyimpan produksi: " + error.message,
+      "error"
+    );
+
+    button.disabled = false;
+    button.textContent = "Simpan";
+
+    input.disabled = false;
+  }
+}
+
+// =====================================================
+// LOGOUT
+// =====================================================
+
+async function logout() {
+
+  const button = $("logoutBtn");
+
+  button.disabled = true;
+  button.textContent = "Sedang keluar...";
+
+  const { error } = await db.auth.signOut();
+
+  if (error) {
+    button.disabled = false;
+    button.textContent = "↪ Keluar dari akun";
+
+    showMessage(
+      "Gagal keluar: " + error.message,
+      "error"
+    );
+
+    return;
+  }
+
+  window.location.href = "index.html";
+}
+
+// =====================================================
+// EVENT LISTENERS
+// =====================================================
+
+function setupEvents() {
+
+  $("periodSelect").addEventListener("change", loadProduction);
+
+  $("refreshBtn").addEventListener("click", loadProduction);
+
+  $("logoutBtn").addEventListener("click", logout);
+
+  setupSidebar();
+}
+
+// =====================================================
+// MULAI APLIKASI
+// =====================================================
+
+async function init() {
+
+  setupEvents();
+
+  if (!db) {
+    showMessage(
+      "Supabase gagal dimuat. Periksa koneksi internet.",
+      "error"
+    );
+
+    renderEmpty("Supabase tidak dapat dihubungkan.");
+    return;
+  }
+
+  const allowed = await checkAdmin();
+
+  if (!allowed) return;
+
+  await loadPeriods();
+}
+
+init();
