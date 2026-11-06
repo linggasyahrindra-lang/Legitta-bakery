@@ -1,0 +1,59 @@
+:root{--brown:#2b1b16;--cream:#f7f0e5;--paper:#fffaf2;--gold:#b58b50;--muted:#806f62;--line:#e8dccb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--brown);font:15px/1.5 Georgia,serif}
+header{background:var(--brown);color:#fff8ed;padding:23px 16px;text-align:center;border-bottom:4px solid var(--gold)}
+.brand{font-size:26px;letter-spacing:3px;font-weight:bold}
+.tag{font:11px Arial;letter-spacing:2px;color:#d9bd91;margin-top:5px}
+main{max-width:980px;margin:26px auto;padding:0 14px}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:20px;margin:14px 0;box-shadow:0 8px 24px #3520160b}
+h2{font-size:21px;margin:0 0 13px}
+h3{font-size:17px;margin:0 0 10px}
+label{display:block;font:12px Arial;color:var(--muted);margin:11px 0 5px}
+input,textarea,button,select{font:14px Arial}
+input,textarea,select{width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--brown)}
+input[type=checkbox]{width:auto}
+textarea{min-height:70px;resize:vertical}
+button{border:0;border-radius:8px;background:var(--brown);color:white;padding:11px 14px;cursor:pointer;margin:8px 6px 0 0}
+button.secondary{background:#eadcc8;color:var(--brown)}
+button.danger{background:#8b3c32}
+button:disabled{opacity:.5;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.muted{color:var(--muted);font:13px Arial,sans-serif}
+.hidden{display:none!important}
+.status{padding:10px 12px;border-radius:8px;background:#f1e8da;margin:12px 0;font:13px Arial;white-space:pre-wrap;overflow-wrap:anywhere}
+.item{border:1px solid var(--line);padding:13px;border-radius:9px;margin:9px 0;background:white}
+.topline{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-block;background:#eee4d5;border-radius:20px;padding:3px 9px;font:11px Arial;color:#624b37}
+footer{text-align:center;color:var(--muted);font:12px Arial;padding:28px}
+.edit-actions{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.qty{max-width:110px}
+.summary{border:1px solid var(--line);padding:13px;border-radius:9px;background:#fff}
+.order-detail{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.detail-row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font:13px Arial}
+.detail-row span:last-child{text-align:right}
+.money-summary{background:#fff8ed;border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px}
+.small-button{font-size:12px;padding:8px 10px}
+
+/* NAVIGASI ADMIN: 4 TOMBOL */
+.admin-nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+.admin-nav button{margin:0;padding:13px 5px;border:1px solid var(--line);background:#eadcc8;color:var(--brown);font-weight:bold}
+.admin-nav button.active{background:var(--brown);color:white;border-color:var(--gold)}
+.slide{animation:slideIn .25s ease}
+@keyframes slideIn{from{opacity:.4;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+.slide-count{text-align:center;color:var(--muted);font:12px Arial;margin:8px}
+.slide-controls{display:flex;justify-content:space-between;gap:10px;margin:14px 0}
+.slide-controls button{flex:1}
+.status-select{max-width:220px}
+.payment-box{background:#fff8ed;border:1px solid var(--line);border-radius:9px;padding:12px;margin-top:12px}
+.payment-box h3{margin-bottom:8px}
+.payment-actions{display:flex;gap:6px;flex-wrap:wrap}
+.payment-actions button{margin:5px 4px 0 0}
+.payment-status{font:12px Arial;color:var(--muted);margin-top:5px}
+
+@media(max-width:480px){
+ .brand{font-size:22px}
+ .panel{padding:15px}
+ .admin-nav{grid-template-columns:repeat(2,1fr)}
+ .admin-nav button{font-size:11px;padding:11px 3px}
+ .status-select{max-width:100%;width:100%}
+}
